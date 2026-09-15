@@ -35,10 +35,6 @@ const MainLayout: React.FC = () => {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
-  if (!isLoggedIn) {
-    return <LoginScreen />;
-  }
-
   // Global Keyboard Shortcut: Ctrl+K / Cmd+K for Global Search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -50,6 +46,10 @@ const MainLayout: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  if (!isLoggedIn) {
+    return <LoginScreen />;
+  }
 
   const handleQuickAction = (
     action: 'customer' | 'asset' | 'collateral' | 'application' | 'repayment' | 'property'
