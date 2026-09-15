@@ -1,0 +1,150 @@
+{
+  "entities": {
+    "SystemSettings": {
+      "title": "SystemSettings",
+      "description": "Organization branding, corporate profile, financial parameters, and governance settings",
+      "type": "object",
+      "properties": {
+        "platformName": { "type": "string" },
+        "platformTitle": { "type": "string" },
+        "platformSubtitle": { "type": "string" },
+        "platformInitials": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "logoType": { "type": "string" },
+        "companyName": { "type": "string" },
+        "brandTagline": { "type": "string" },
+        "companyAddress": { "type": "string" },
+        "companyPhone": { "type": "string" },
+        "companyEmail": { "type": "string" },
+        "companyWebsite": { "type": "string" },
+        "kraPin": { "type": "string" },
+        "registrationNumber": { "type": "string" },
+        "currencyCode": { "type": "string" },
+        "currencySymbol": { "type": "string" },
+        "financialYearStart": { "type": "string" },
+        "financialYearEnd": { "type": "string" },
+        "defaultLtvPct": { "type": "number" },
+        "defaultGracePeriodDays": { "type": "number" },
+        "defaultPenaltyRateMonthly": { "type": "number" },
+        "smsAlertsEnabled": { "type": "boolean" },
+        "emailAlertsEnabled": { "type": "boolean" },
+        "requireCollateralVerificationBeforeApproval": { "type": "boolean" }
+      }
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authorized staff and operator user profile in DAVETECH ERP",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "branchId": { "type": "string" },
+        "phone": { "type": "string" },
+        "active": { "type": "boolean" }
+      }
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Borrower customer record in DAVETECH ERP",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerNumber": { "type": "string" },
+        "fullName": { "type": "string" },
+        "idNumber": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "branchId": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    },
+    "Loan": {
+      "title": "Loan",
+      "description": "Disbursed credit facility and repayment schedule ledger",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "loanNumber": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "principal": { "type": "number" },
+        "outstandingPrincipal": { "type": "number" },
+        "status": { "type": "string" },
+        "daysInArrears": { "type": "number" }
+      }
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable ledger record of administrative and financial transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "module": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string" }
+      }
+    },
+    "Property": {
+      "title": "Property",
+      "description": "Real estate property listing for rent or sale, plots and lands",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "listingType": { "type": "string" },
+        "price": { "type": "number" },
+        "location": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    },
+    "Collateral": {
+      "title": "Collateral",
+      "description": "Secured asset and chattel registered against loan facilities",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "assetName": { "type": "string" },
+        "assetType": { "type": "string" },
+        "forcedSaleValue": { "type": "number" },
+        "marketValue": { "type": "number" },
+        "status": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/system_settings/{settingId}": {
+      "schema": "SystemSettings",
+      "description": "System branding, organization profile and operational settings"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Authorized operators and user accounts"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Customer borrower records"
+    },
+    "/loans/{loanId}": {
+      "schema": "Loan",
+      "description": "Active and completed loan facilities"
+    },
+    "/collateral/{assetId}": {
+      "schema": "Collateral",
+      "description": "Registered collateral and secured chattel"
+    },
+    "/properties/{propertyId}": {
+      "schema": "Property",
+      "description": "Real estate properties, land and plots for sale or rent"
+    },
+    "/audit_logs/{auditId}": {
+      "schema": "AuditLog",
+      "description": "Immutable transactional audit trail"
+    }
+  }
+}

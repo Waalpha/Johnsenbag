@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Allow read and write access for application documents
+    match /system_settings/{settingId} {
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    match /customers/{customerId} {
+      allow read, write: if true;
+    }
+
+    match /loans/{loanId} {
+      allow read, write: if true;
+    }
+
+    match /collateral/{assetId} {
+      allow read, write: if true;
+    }
+
+    match /assets/{assetId} {
+      allow read, write: if true;
+    }
+
+    match /repayments/{repaymentId} {
+      allow read, write: if true;
+    }
+
+    match /properties/{propertyId} {
+      allow read, write: if true;
+    }
+
+    match /maintenance_requests/{requestId} {
+      allow read, write: if true;
+    }
+
+    match /recovery_cases/{caseId} {
+      allow read, write: if true;
+    }
+
+    match /audit_logs/{auditId} {
+      allow read, write: if true;
+    }
+
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+

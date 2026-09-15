@@ -1,0 +1,6 @@
+{
+  "name": "Davetech ERP",
+  "description": "Property, Asset, Collateral & Secured Lending ERP by Davetech Solutions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
