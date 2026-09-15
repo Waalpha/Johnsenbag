@@ -119,6 +119,8 @@ export type AssetCategory =
   | 'machinery'
   | 'equipment'
   | 'electronics'
+  | 'household_goods'
+  | 'furniture'
   | 'agricultural_asset'
   | 'business_asset'
   | 'inventory'
@@ -218,6 +220,7 @@ export interface Asset {
   verificationChecklist?: any;
   vehicleDetails?: VehicleDetails;
   propertyDetails?: PropertyDetails;
+  itemDetails?: ItemDetails;
   notes?: string;
   createdAt: string;
 }
@@ -366,6 +369,38 @@ export interface LoanApplication {
   existingLiabilities?: number;
   documents?: any[];
   creditAssessment?: any;
+  source?: 'in_branch' | 'online_whatsapp' | 'agent_referral' | 'portal';
+  applicationDate?: string;
+  applicantDetails?: {
+    fullName: string;
+    idNumber: string;
+    phone: string;
+    alternatePhone?: string;
+    email?: string;
+    county?: string;
+    physicalAddress?: string;
+    employmentType?: string;
+    employerOrBusiness?: string;
+    monthlyIncome?: number;
+    monthlyExpenses?: number;
+    nextOfKinName?: string;
+    nextOfKinPhone?: string;
+    nextOfKinRelation?: string;
+  };
+  proposedCollateralDetails?: {
+    category: AssetCategory;
+    title: string;
+    brand?: string;
+    model?: string;
+    serialOrRegNumber?: string;
+    condition?: string;
+    estimatedValue: number;
+    description?: string;
+    photos?: string[];
+  };
+  submissionIp?: string;
+  clientSignature?: string;
+  whatsappConfirmationSent?: boolean;
   statusHistory: {
     status: LoanApplicationStatus;
     changedBy: string;
@@ -373,6 +408,51 @@ export interface LoanApplication {
     comment: string;
   }[];
   createdAt: string;
+}
+
+export interface OnlineApplicationSubmission {
+  // Step 1: Loan Requirements
+  loanProductId: string;
+  requestedAmount: number;
+  durationMonths: number;
+  repaymentFrequency: RepaymentFrequency;
+  purpose: string;
+
+  // Step 2: Personal KYC
+  fullName: string;
+  idNumber: string;
+  phone: string;
+  alternatePhone?: string;
+  email?: string;
+  county: string;
+  physicalAddress: string;
+
+  // Step 3: Income Profile
+  employmentType: 'salaried' | 'business_owner' | 'informal_jua_kali' | 'agriculture' | 'freelancer';
+  employerOrBusiness: string;
+  monthlyIncome: number;
+  monthlyExpenses: number;
+
+  // Step 4: Proposed Security / Collateral
+  hasCollateral: boolean;
+  collateralCategory: AssetCategory;
+  collateralTitle: string;
+  collateralBrand?: string;
+  collateralModel?: string;
+  collateralSerialOrReg?: string;
+  collateralCondition?: string;
+  collateralEstimatedValue: number;
+  collateralDescription?: string;
+  photos?: string[]; // Data URLs or photo previews
+
+  // Step 5: Next of Kin / Guarantor
+  nextOfKinName: string;
+  nextOfKinRelation: string;
+  nextOfKinPhone: string;
+
+  // Step 6: Consent
+  agreedToCrbCheck: boolean;
+  signatureText: string;
 }
 
 export interface CreditAssessment {
@@ -711,5 +791,97 @@ export interface MaintenanceRequest {
   cost: number;
   dateReported: string;
 }
+
+// ----------------------------------------------------
+// Household Items & Chattel Financing Types
+// ----------------------------------------------------
+export type HouseholdItemType =
+  | 'tv'
+  | 'woofer'
+  | 'chair'
+  | 'fridge'
+  | 'microwave'
+  | 'laptop'
+  | 'phone'
+  | 'cooker'
+  | 'furniture'
+  | 'generator'
+  | 'solar_system'
+  | 'other';
+
+export interface ItemDetails {
+  itemType: HouseholdItemType;
+  brand: string;
+  model: string;
+  serialNumber?: string;
+  color?: string;
+  screenSize?: string; // e.g. '55 Inch Smart 4K UHD'
+  powerWattage?: string; // e.g. '300W RMS'
+  material?: string; // e.g. 'Genuine Leather / Hardwood Mahogany'
+  condition: 'brand_new' | 'mint' | 'good' | 'fair';
+  accessoriesIncluded?: string[]; // e.g. ['Remote Control', 'Power Cable', 'Wall Mount']
+  custodyType: 'in_branch_vault' | 'held_by_borrower_chattel';
+  custodyLocation?: string;
+  originalReceiptOrReceiptProof?: boolean;
+}
+
+export interface ItemLoanAgreement {
+  id: string; // e.g. AGR-ITEM-2026-000001
+  agreementNumber: string; // e.g. DT/AGR/ITEM/2026/014
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerIdNumber: string;
+  customerEmail?: string;
+  customerAddress?: string;
+
+  // Item Information
+  itemId?: string;
+  itemType: HouseholdItemType;
+  itemTitle: string;
+  itemBrand: string;
+  itemModel: string;
+  itemSerialNumber?: string;
+  itemCondition: string;
+  itemMarketValue: number;
+  itemForcedSaleValue: number;
+  accessoriesIncluded: string[];
+  custodyType: 'in_branch_vault' | 'held_by_borrower_chattel';
+  custodyLocation?: string;
+
+  // Loan Financials
+  principalAmount: number;
+  durationMonths: number;
+  interestRateMonthly: number;
+  interestMethod: 'flat_rate' | 'reducing_balance';
+  monthlyInstallment: number;
+  totalInterest: number;
+  totalPayable: number;
+  processingFee: number;
+  insuranceFee?: number;
+  disbursedAmount: number;
+  gracePeriodDays: number;
+  penaltyRateMonthly: number;
+  repaymentFrequency: 'weekly' | 'bi_weekly' | 'monthly';
+
+  // Agreement Workflow
+  status: 'draft' | 'sent_to_client' | 'signed' | 'active_loan' | 'completed' | 'cancelled';
+  draftedBy: string;
+  draftedAt: string;
+  sentAt?: string;
+  sentVia?: 'whatsapp' | 'email' | 'direct_link' | 'printed';
+
+  // Digital Signature & Acceptance
+  signedAt?: string;
+  signedByName?: string;
+  clientSignatureData?: string;
+  clientIpOrDevice?: string;
+  witnessName?: string;
+  lenderSignatoryName?: string;
+
+  notes?: string;
+  onlineShareableToken?: string;
+}
+
 
 

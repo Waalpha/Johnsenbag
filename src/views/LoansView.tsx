@@ -4,7 +4,7 @@
  * and official legal contract generation.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Coins,
   Search,
@@ -66,6 +66,13 @@ export const LoansView: React.FC = () => {
   const refreshData = () => {
     setLoans(DataService.getLoans());
   };
+
+  useEffect(() => {
+    const unsub = DataService.subscribe(() => {
+      setLoans(DataService.getLoans());
+    });
+    return unsub;
+  }, []);
 
   const filteredLoans = loans.filter((l) => {
     if (statusFilter !== 'all' && l.status !== statusFilter) return false;

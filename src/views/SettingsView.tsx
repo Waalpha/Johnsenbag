@@ -24,11 +24,17 @@ import {
   Image as ImageIcon,
   Upload,
   Trash2,
+  Database,
+  AlertTriangle,
+  Coins,
+  ShieldCheck,
 } from 'lucide-react';
 import { DataService } from '../services/dataService';
+import { LoanEngine } from '../services/loanEngine';
 import { UserRole } from '../types/erp';
 import { useAuth } from '../context/AuthContext';
 import { Modal } from '../components/common/Modal';
+import { ClearDataModal } from '../components/common/ClearDataModal';
 
 export const SettingsView: React.FC = () => {
   const {
@@ -41,9 +47,18 @@ export const SettingsView: React.FC = () => {
     setIsEditPlatformModalOpen,
   } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'company' | 'rbac' | 'audit'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'data' | 'rbac' | 'audit'>('company');
   const [auditLogs, setAuditLogs] = useState(() => DataService.getAuditLogs());
   const [searchAudit, setSearchAudit] = useState('');
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+
+  // Subscribe to live DataService updates
+  useEffect(() => {
+    const unsub = DataService.subscribe(() => {
+      setAuditLogs(DataService.getAuditLogs());
+    });
+    return unsub;
+  }, []);
 
   // Platform & Company Settings
   const [platformName, setPlatformName] = useState(systemSettings?.platformName || 'DAVETECH');
@@ -221,7 +236,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Tab Controls */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-semibold flex-wrap">
           <button
             onClick={() => setActiveTab('company')}
             className={`px-3 py-1.5 rounded-lg transition ${
@@ -231,6 +246,17 @@ export const SettingsView: React.FC = () => {
             }`}
           >
             Platform & Branding
+          </button>
+          <button
+            onClick={() => setActiveTab('data')}
+            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+              activeTab === 'data'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs'
+                : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5 text-rose-500" />
+            <span>Data & Portfolio Reset</span>
           </button>
           <button
             onClick={() => setActiveTab('rbac')}
@@ -714,6 +740,180 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
+      {/* TAB: DATA MANAGEMENT & CLEAR / RESET */}
+      {activeTab === 'data' && (
+        <div className="space-y-6 max-w-4xl">
+          {/* Section: Live Database & Portfolio Status */}
+          <div className="p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center border border-rose-200/50 dark:border-rose-800/50">
+                  <Database className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    Database State & Portfolio Metrics
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Active records in local resilient storage and Firestore cloud database.
+                  </p>
+                </div>
+              </div>
+
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Live Sync Connected
+              </span>
+            </div>
+
+            {/* Metrics cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                <span className="text-[10px] text-slate-400 block">Total Portfolio</span>
+                <span className="text-base font-bold font-mono text-slate-900 dark:text-slate-100">
+                  {LoanEngine.formatKES(DataService.getLoans().reduce((s, l) => s + (l.principal || 0), 0))}
+                </span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  {DataService.getLoans().length} Facilities Issued
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                <span className="text-[10px] text-slate-400 block">Outstanding Principal</span>
+                <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                  {LoanEngine.formatKES(DataService.getLoans().reduce((s, l) => s + (l.outstandingPrincipal || 0), 0))}
+                </span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  {DataService.getRepayments().length} Repayments Recorded
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                <span className="text-[10px] text-slate-400 block">Collateral Value</span>
+                <span className="text-base font-bold font-mono text-slate-900 dark:text-slate-100">
+                  {LoanEngine.formatKES(DataService.getCollaterals().reduce((s, c) => s + (c.marketValue || 0), 0))}
+                </span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  {DataService.getCollaterals().length} Collateral Items
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                <span className="text-[10px] text-slate-400 block">Borrower Database</span>
+                <span className="text-base font-bold font-mono text-slate-900 dark:text-slate-100">
+                  {DataService.getCustomers().length} Customers
+                </span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  {DataService.getProperties().length} Properties Listed
+                </span>
+              </div>
+            </div>
+
+            {/* Direct Clear Button Button */}
+            <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-rose-50 dark:bg-rose-950/20 p-4 rounded-xl border border-rose-200 dark:border-rose-900/40">
+              <div>
+                <h4 className="text-xs font-bold text-rose-900 dark:text-rose-200">
+                  Interactive Clear & Reset Modal
+                </h4>
+                <p className="text-[11px] text-rose-700 dark:text-rose-300/80 mt-0.5">
+                  Clear demo figures to KSh 0.00, wipe all database tables, or reload demo facilities anytime.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsClearModalOpen(true)}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Open Clear Data Modal</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Section: Action Cards for Quick Direct Operations */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Card 1: Clear Loan Portfolio */}
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                  <Coins className="w-4 h-4" />
+                </div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  Clear Loan Portfolio (KSh 0.00)
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Wipes all loan facilities, collateral pledges, valuations, and collections. Portfolio balances reset to KSh 0.00.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (window.confirm('Reset loan portfolio to KSh 0.00? This clears all demo loans and collateral.')) {
+                    await DataService.clearPortfolioData(currentUser);
+                  }
+                }}
+                className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Reset to KSh 0.00</span>
+              </button>
+            </div>
+
+            {/* Card 2: Complete Wipe */}
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center">
+                  <Database className="w-4 h-4" />
+                </div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  Wipe Entire Database
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Wipes loans, collateral, customers, asset registries, properties, and applications. Clean slate for production.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (window.confirm('Wipe the ENTIRE database clean? All records will be cleared for a complete fresh start.')) {
+                    await DataService.clearAllSystemData(currentUser);
+                  }
+                }}
+                className="w-full py-2 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Wipe Everything</span>
+              </button>
+            </div>
+
+            {/* Card 3: Restore Demo Data */}
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3 flex flex-col justify-between">
+              <div className="space-y-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <RotateCcw className="w-4 h-4" />
+                </div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  Restore Demo Portfolio
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Reloads the sample 4 loan facilities (KSh 18.6M), sample motor vehicles, and title deeds for demonstration.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  DataService.restoreSeedData(currentUser);
+                }}
+                className="w-full py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reload Demo (18.6M)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TAB 2: RBAC PERMISSIONS MATRIX */}
       {activeTab === 'rbac' && (
         <div className="space-y-4">
@@ -829,6 +1029,12 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Clear Portfolio & System Reset Modal */}
+      <ClearDataModal
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+      />
     </div>
   );
 };

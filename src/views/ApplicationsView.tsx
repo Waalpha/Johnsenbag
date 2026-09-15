@@ -19,12 +19,17 @@ import {
   Eye,
   Send,
   Wallet,
+  MessageCircle,
+  Smartphone,
+  ExternalLink,
 } from 'lucide-react';
 import { DataService } from '../services/dataService';
 import { LoanApplication, Customer, Collateral, LoanProduct } from '../types/erp';
 import { LoanEngine } from '../services/loanEngine';
 import { useAuth } from '../context/AuthContext';
 import { Modal } from '../components/common/Modal';
+import { ShareApplicationWhatsAppModal } from '../components/loans/ShareApplicationWhatsAppModal';
+import { ApplicationReviewModal } from '../components/loans/ApplicationReviewModal';
 
 export const ApplicationsView: React.FC = () => {
   const { currentUser, activeBranchId, hasPermission, isSingleOperatorMode } = useAuth();
@@ -32,12 +37,16 @@ export const ApplicationsView: React.FC = () => {
   const [applications, setApplications] = useState<LoanApplication[]>(() => DataService.getApplications());
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'online_whatsapp' | 'in_branch'>('all');
 
   // Modals
   const [isNewAppModalOpen, setIsNewAppModalOpen] = useState(false);
   const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
   const [isDisburseModalOpen, setIsDisburseModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<LoanApplication | null>(null);
+  const [reviewApp, setReviewApp] = useState<LoanApplication | null>(null);
   const [disburseApp, setDisburseApp] = useState<LoanApplication | null>(null);
   const [disburseMethod, setDisburseMethod] = useState<'bank' | 'mobile_money' | 'cash' | 'cheque'>('mobile_money');
   const [disburseRef, setDisburseRef] = useState('');
@@ -137,12 +146,20 @@ export const ApplicationsView: React.FC = () => {
   const filteredApps = applications.filter((a) => {
     if (activeBranchId !== 'all' && a.branchId !== activeBranchId) return false;
     if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+    if (sourceFilter === 'online_whatsapp' && a.source !== 'online_whatsapp') return false;
+    if (sourceFilter === 'in_branch' && a.source === 'online_whatsapp') return false;
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
+      const cust = customers.find((c) => c.id === a.customerId);
       return Boolean(
         a.applicationNumber?.toLowerCase().includes(q) ||
         a.customerId?.toLowerCase().includes(q) ||
-        a.purpose?.toLowerCase().includes(q)
+        a.purpose?.toLowerCase().includes(q) ||
+        cust?.fullName?.toLowerCase().includes(q) ||
+        cust?.phone?.includes(q) ||
+        a.applicantDetails?.fullName?.toLowerCase().includes(q) ||
+        a.applicantDetails?.phone?.includes(q) ||
+        a.proposedCollateralDetails?.title?.toLowerCase().includes(q)
       );
     }
     return true;
@@ -253,42 +270,93 @@ export const ApplicationsView: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            End-to-end secured underwriting, live debt-service-ratio stress testing, and committee approvals.
+            End-to-end secured underwriting, live debt-service-ratio stress testing, and online WhatsApp application intake.
           </p>
         </div>
 
-        {hasPermission('loans.create') && (
+        <div className="flex items-center gap-2 flex-wrap">
           <button
-            id="new-application-btn"
-            onClick={() => {
-              setAppError('');
-              setIsNewAppModalOpen(true);
-            }}
+            id="share-whatsapp-app-btn"
+            onClick={() => setIsShareModalOpen(true)}
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-1.5"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New Loan Application</span>
+            <MessageCircle className="w-4 h-4 fill-white" />
+            <span>Share Form via WhatsApp</span>
           </button>
-        )}
+
+          {hasPermission('loans.create') && (
+            <button
+              id="new-application-btn"
+              onClick={() => {
+                setAppError('');
+                setIsNewAppModalOpen(true);
+              }}
+              className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Loan Application</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-          <input
-            type="text"
-            placeholder="Search app number, customer, purpose..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:border-emerald-500"
-          />
+      <div className="flex flex-col md:flex-row items-center justify-between gap-3 p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+        <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full md:w-auto">
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              placeholder="Search ref, borrower, phone, purpose..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 outline-none text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:border-emerald-500"
+            />
+          </div>
+
+          {/* Source Tabs */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg text-[11px] font-medium border border-slate-200 dark:border-slate-700 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setSourceFilter('all')}
+              className={`flex-1 sm:flex-none px-2.5 py-1 rounded-md transition ${
+                sourceFilter === 'all'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold shadow-xs'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+              }`}
+            >
+              All ({applications.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceFilter('online_whatsapp')}
+              className={`flex-1 sm:flex-none px-2.5 py-1 rounded-md transition flex items-center justify-center gap-1 ${
+                sourceFilter === 'online_whatsapp'
+                  ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                  : 'text-emerald-700 dark:text-emerald-400 hover:text-emerald-800'
+              }`}
+            >
+              <MessageCircle className="w-3 h-3" />
+              WhatsApp Inbound ({applications.filter((a) => a.source === 'online_whatsapp').length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceFilter('in_branch')}
+              className={`flex-1 sm:flex-none px-2.5 py-1 rounded-md transition ${
+                sourceFilter === 'in_branch'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold shadow-xs'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+              }`}
+            >
+              In-Branch ({applications.filter((a) => a.source !== 'online_whatsapp').length})
+            </button>
+          </div>
         </div>
 
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-2.5 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 outline-none"
+          className="w-full md:w-auto px-2.5 py-1.5 rounded-lg text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 outline-none"
         >
           <option value="all">All Pipeline Stages</option>
           <option value="submitted">Submitted</option>
@@ -338,17 +406,26 @@ export const ApplicationsView: React.FC = () => {
                         </span>
                       </td>
                       <td className="p-3.5">
-                        <p className="font-semibold text-slate-900 dark:text-slate-100">
-                          {cust?.fullName || app.customerId}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-semibold text-slate-900 dark:text-slate-100">
+                            {cust?.fullName || app.applicantDetails?.fullName || app.customerId}
+                          </p>
+                          {app.source === 'online_whatsapp' && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                              <MessageCircle className="w-2.5 h-2.5" /> WhatsApp
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-mono">
+                          {cust?.phone || app.applicantDetails?.phone}
                         </p>
-                        <p className="text-[10px] text-slate-400">{cust?.phone}</p>
                       </td>
                       <td className="p-3.5">
                         <span className="font-medium text-slate-800 dark:text-slate-200">
                           {app.productName}
                         </span>
-                        <span className="block text-[10px] text-slate-400 font-mono">
-                          Security: {app.collateralId}
+                        <span className="block text-[10px] text-slate-400 font-mono truncate max-w-[140px]">
+                          {app.proposedCollateralDetails?.title ? `Security: ${app.proposedCollateralDetails.title}` : `Collateral: ${app.collateralId || 'None'}`}
                         </span>
                       </td>
                       <td className="p-3.5 text-right font-mono font-bold text-slate-900 dark:text-slate-100">
@@ -390,6 +467,18 @@ export const ApplicationsView: React.FC = () => {
                       </td>
                       <td className="p-3.5 text-center">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => {
+                              setReviewApp(app);
+                              setIsReviewModalOpen(true);
+                            }}
+                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-md text-[10px] font-semibold transition flex items-center gap-1"
+                            title="View Full Application & Client Dossier"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>Review</span>
+                          </button>
+
                           {app.status === 'submitted' && (
                             <>
                               <button
@@ -860,6 +949,31 @@ export const ApplicationsView: React.FC = () => {
           </form>
         </Modal>
       )}
+
+      {/* Share Application via WhatsApp Modal */}
+      <ShareApplicationWhatsAppModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+      />
+
+      {/* Application Review Modal */}
+      <ApplicationReviewModal
+        isOpen={isReviewModalOpen}
+        onClose={() => {
+          setIsReviewModalOpen(false);
+          setReviewApp(null);
+        }}
+        application={reviewApp}
+        onApprove={(app) => {
+          handleQuickApprove(app);
+        }}
+        onAssess={(app) => {
+          setSelectedApp(app);
+          setAssessRecommendedAmount(app.requestedAmount);
+          setAssessRecommendedTenure(app.requestedTenureMonths || 12);
+          setIsAssessmentModalOpen(true);
+        }}
+      />
     </div>
   );
 };

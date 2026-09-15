@@ -19,6 +19,8 @@ import {
   EyeOff,
   Briefcase,
   AlertCircle,
+  MessageCircle,
+  FileCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types/erp';
@@ -212,11 +214,36 @@ export const LoginScreen: React.FC = () => {
           </div>
         </div>
 
+        {/* Public WhatsApp Online Application & Agreement Links */}
+        <div className="mt-5 pt-5 border-t border-slate-700/60 text-center space-y-2">
+          <a
+            href="#apply"
+            onClick={() => {
+              window.location.hash = '#apply';
+            }}
+            className="w-full py-2.5 px-3 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 rounded-xl text-xs font-bold text-emerald-300 flex items-center justify-center gap-2 transition"
+          >
+            <MessageCircle className="w-4 h-4 text-emerald-400" />
+            <span>Apply for Loan Online (Client WhatsApp Form)</span>
+          </a>
+
+          <a
+            href="#agreement"
+            onClick={() => {
+              window.location.hash = '#agreement';
+            }}
+            className="w-full py-2.5 px-3 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 rounded-xl text-xs font-bold text-indigo-300 flex items-center justify-center gap-2 transition"
+          >
+            <FileCheck className="w-4 h-4 text-indigo-400" />
+            <span>Client Agreement Portal (Digital e-Signature)</span>
+          </a>
+        </div>
+
         {/* Register New Account Link */}
-        <div className="mt-6 text-center">
+        <div className="mt-4 text-center">
           <button
             onClick={() => setIsRegisterOpen(true)}
-            className="text-xs text-emerald-400 hover:underline font-semibold inline-flex items-center gap-1.5"
+            className="text-xs text-slate-400 hover:text-emerald-400 hover:underline font-semibold inline-flex items-center gap-1.5 transition"
           >
             <UserPlus className="w-3.5 h-3.5" /> Register New Staff or Customer Account
           </button>

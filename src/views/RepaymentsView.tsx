@@ -4,7 +4,7 @@
  * Official receipt generator, and double-entry reversal mechanics.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Wallet,
   Plus,
@@ -32,10 +32,16 @@ export const RepaymentsView: React.FC = () => {
   const [repayments, setRepayments] = useState<Repayment[]>(() => DataService.getRepayments());
   const [searchTerm, setSearchTerm] = useState('');
   const [methodFilter, setMethodFilter] = useState<string>('all');
+  const [selectedReceipts, setSelectedReceipts] = useState<string[]>([]);
 
   // Modals
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [isReversalModalOpen, setIsReversalModalOpen] = useState(false);
+  const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
+  const [isSingleDeleteModalOpen, setIsSingleDeleteModalOpen] = useState(false);
+  const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = useState(false);
+  const [targetDeleteRepayment, setTargetDeleteRepayment] = useState<Repayment | null>(null);
+  const [rollbackBalancesOnDelete, setRollbackBalancesOnDelete] = useState(true);
   const [selectedRepayment, setSelectedRepayment] = useState<Repayment | null>(null);
 
   // Print state
@@ -64,6 +70,13 @@ export const RepaymentsView: React.FC = () => {
   const refreshData = () => {
     setRepayments(DataService.getRepayments());
   };
+
+  useEffect(() => {
+    const unsub = DataService.subscribe(() => {
+      setRepayments(DataService.getRepayments());
+    });
+    return unsub;
+  }, []);
 
   const selectedTargetLoan = loans.find((l) => l.id === payLoanId);
 
@@ -148,15 +161,69 @@ export const RepaymentsView: React.FC = () => {
   };
 
   const handleClearAllPayments = () => {
-    if (window.confirm('Are you sure you want to clear all payment records? This action cannot be undone.')) {
-      try {
-        DataService.clearAllRepayments(currentUser);
-        refreshData();
-      } catch (err: any) {
-        alert(err.message || 'Failed to clear payments');
-      }
+    setIsClearAllModalOpen(true);
+  };
+
+  const confirmClearAll = () => {
+    try {
+      DataService.clearAllRepayments(currentUser, rollbackBalancesOnDelete);
+      setIsClearAllModalOpen(false);
+      setSelectedReceipts([]);
+      refreshData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to clear payments');
     }
   };
+
+  const handleSingleDelete = (rep: Repayment) => {
+    setTargetDeleteRepayment(rep);
+    setIsSingleDeleteModalOpen(true);
+  };
+
+  const confirmSingleDelete = () => {
+    if (!targetDeleteRepayment) return;
+    try {
+      DataService.deleteRepayment(targetDeleteRepayment.receiptNumber, currentUser, rollbackBalancesOnDelete);
+      setIsSingleDeleteModalOpen(false);
+      setTargetDeleteRepayment(null);
+      setSelectedReceipts((prev) => prev.filter((r) => r !== targetDeleteRepayment.receiptNumber));
+      refreshData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove payment');
+    }
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedReceipts.length === 0) return;
+    setIsBatchDeleteModalOpen(true);
+  };
+
+  const confirmBatchDelete = () => {
+    try {
+      DataService.deleteSelectedRepayments(selectedReceipts, currentUser, rollbackBalancesOnDelete);
+      setIsBatchDeleteModalOpen(false);
+      setSelectedReceipts([]);
+      refreshData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove selected payments');
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedReceipts.length === filteredRepayments.length) {
+      setSelectedReceipts([]);
+    } else {
+      setSelectedReceipts(filteredRepayments.map((r) => r.receiptNumber));
+    }
+  };
+
+  const toggleSelectOne = (receiptNumber: string) => {
+    setSelectedReceipts((prev) =>
+      prev.includes(receiptNumber) ? prev.filter((r) => r !== receiptNumber) : [...prev, receiptNumber]
+    );
+  };
+
+  const totalClearedAmount = repayments.reduce((sum, r) => sum + (r.amount || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -176,8 +243,18 @@ export const RepaymentsView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {hasPermission('repayments.post') && repayments.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {selectedReceipts.length > 0 && (
+            <button
+              onClick={handleBatchDelete}
+              className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-1.5 animate-pulse"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Remove Selected ({selectedReceipts.length})</span>
+            </button>
+          )}
+
+          {repayments.length > 0 && (
             <button
               onClick={handleClearAllPayments}
               className="px-3 py-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold border border-rose-200 dark:border-rose-900 transition flex items-center gap-1.5"
@@ -235,6 +312,15 @@ export const RepaymentsView: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
               <tr>
+                <th className="p-3.5 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedReceipts.length === filteredRepayments.length && filteredRepayments.length > 0}
+                    onChange={toggleSelectAll}
+                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                    title="Select / Deselect All"
+                  />
+                </th>
                 <th className="p-3.5 font-semibold">Receipt No</th>
                 <th className="p-3.5 font-semibold">Facility / Customer</th>
                 <th className="p-3.5 font-semibold text-right">Amount Paid</th>
@@ -249,7 +335,7 @@ export const RepaymentsView: React.FC = () => {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60 font-mono">
               {filteredRepayments.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-slate-400 font-sans">
+                  <td colSpan={10} className="p-8 text-center text-slate-400 font-sans">
                     No payment collection transactions recorded.
                   </td>
                 </tr>
@@ -257,14 +343,23 @@ export const RepaymentsView: React.FC = () => {
                 filteredRepayments.map((rep) => {
                   const cust = customers.find((c) => c.id === rep.customerId);
                   const isReversed = rep.isReversed;
+                  const isSelected = selectedReceipts.includes(rep.receiptNumber);
 
                   return (
                     <tr
                       key={rep.id}
                       className={`hover:bg-slate-50/80 dark:hover:bg-slate-750/50 transition font-sans ${
-                        isReversed ? 'opacity-60 bg-rose-50/20 dark:bg-rose-950/10' : ''
-                      }`}
+                        isSelected ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : ''
+                      } ${isReversed ? 'opacity-60 bg-rose-50/20 dark:bg-rose-950/10' : ''}`}
                     >
+                      <td className="p-3.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectOne(rep.receiptNumber)}
+                          className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        />
+                      </td>
                       <td className="p-3.5 font-mono">
                         <span className="font-bold text-slate-900 dark:text-slate-100">
                           {rep.receiptNumber}
@@ -337,12 +432,20 @@ export const RepaymentsView: React.FC = () => {
                                 setSelectedRepayment(rep);
                                 setIsReversalModalOpen(true);
                               }}
-                              className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-rose-600 transition"
+                              className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-amber-600 transition"
                               title="Reverse Erroneous Transaction"
                             >
                               <RotateCcw className="w-4 h-4" />
                             </button>
                           )}
+
+                          <button
+                            onClick={() => handleSingleDelete(rep)}
+                            className="p-1.5 rounded-md hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 transition"
+                            title="Remove / Delete Payment Record"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -532,6 +635,196 @@ export const RepaymentsView: React.FC = () => {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* MODAL 3: CLEAR ALL PAYMENTS */}
+      {isClearAllModalOpen && (
+        <Modal
+          isOpen={isClearAllModalOpen}
+          onClose={() => setIsClearAllModalOpen(false)}
+          title="Clear All Repayments Ledger"
+          size="md"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-rose-900 dark:text-rose-200 text-sm">
+                  Clear All {repayments.length} Payment Records?
+                </p>
+                <p className="text-rose-700 dark:text-rose-300 mt-1">
+                  You are about to remove all payment records currently recorded in the system, totaling{' '}
+                  <strong className="font-mono">{LoanEngine.formatKES(totalClearedAmount)}</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rollbackBalancesOnDelete}
+                  onChange={(e) => setRollbackBalancesOnDelete(e.target.checked)}
+                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                />
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  Restore active loan balances back to uncollected amounts
+                </span>
+              </label>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 pl-6">
+                Recommended: Subtracts the cleared payments from the loans' total paid amount and restores principal/interest/fees outstanding.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setIsClearAllModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-200 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmClearAll}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold transition flex items-center gap-1.5 shadow-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Yes, Clear All Payments</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* MODAL 4: BATCH DELETE SELECTED PAYMENTS */}
+      {isBatchDeleteModalOpen && (
+        <Modal
+          isOpen={isBatchDeleteModalOpen}
+          onClose={() => setIsBatchDeleteModalOpen(false)}
+          title={`Remove Selected Payments (${selectedReceipts.length})`}
+          size="md"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-rose-900 dark:text-rose-200 text-sm">
+                  Delete {selectedReceipts.length} Selected Payment(s)?
+                </p>
+                <p className="text-rose-700 dark:text-rose-300 mt-1">
+                  These selected payments will be permanently purged from the repayment ledger.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rollbackBalancesOnDelete}
+                  onChange={(e) => setRollbackBalancesOnDelete(e.target.checked)}
+                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                />
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  Restore loan outstanding balances for non-reversed payments
+                </span>
+              </label>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 pl-6">
+                Restores the corresponding principal, interest, and fees on each linked loan facility.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => setIsBatchDeleteModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-200 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmBatchDelete}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold transition flex items-center gap-1.5 shadow-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Yes, Remove Selected</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* MODAL 5: SINGLE DELETE PAYMENT */}
+      {isSingleDeleteModalOpen && targetDeleteRepayment && (
+        <Modal
+          isOpen={isSingleDeleteModalOpen}
+          onClose={() => {
+            setIsSingleDeleteModalOpen(false);
+            setTargetDeleteRepayment(null);
+          }}
+          title="Remove Payment Record"
+          size="md"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-rose-900 dark:text-rose-200 text-sm">
+                  Delete Receipt {targetDeleteRepayment.receiptNumber}?
+                </p>
+                <p className="text-rose-700 dark:text-rose-300 mt-1">
+                  Amount:{' '}
+                  <strong className="font-mono text-slate-900 dark:text-slate-100">
+                    {LoanEngine.formatKES(targetDeleteRepayment.amount)}
+                  </strong>{' '}
+                  for Facility <strong className="font-mono">{targetDeleteRepayment.loanId}</strong> (Ref:{' '}
+                  {targetDeleteRepayment.transactionReference}).
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-2">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rollbackBalancesOnDelete}
+                  onChange={(e) => setRollbackBalancesOnDelete(e.target.checked)}
+                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                />
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  Restore loan balance (rollback {LoanEngine.formatKES(targetDeleteRepayment.amount)})
+                </span>
+              </label>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 pl-6">
+                Reverts loan principal of {LoanEngine.formatKES(targetDeleteRepayment.principalAllocation)} and interest of{' '}
+                {LoanEngine.formatKES(targetDeleteRepayment.interestAllocation)}.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSingleDeleteModalOpen(false);
+                  setTargetDeleteRepayment(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold hover:bg-slate-200 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmSingleDelete}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold transition flex items-center gap-1.5 shadow-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Yes, Remove Payment</span>
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
 

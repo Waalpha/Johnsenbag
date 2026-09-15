@@ -4,7 +4,7 @@
  * collateral distribution, arrears aging, and recent activity timeline.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Coins,
   ShieldCheck,
@@ -23,6 +23,8 @@ import {
   Home,
   MapPin,
   Wrench,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -42,6 +44,7 @@ import { DataService } from '../services/dataService';
 import { LoanEngine } from '../services/loanEngine';
 import { useAuth } from '../context/AuthContext';
 import { ActiveView } from '../components/layout/Sidebar';
+import { ClearDataModal } from '../components/common/ClearDataModal';
 
 interface DashboardViewProps {
   onNavigate: (view: ActiveView) => void;
@@ -53,6 +56,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onQuickAction,
 }) => {
   const { systemSettings, setIsEditPlatformModalOpen } = useAuth();
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
 
   const loans = DataService.getLoans();
   const collaterals = DataService.getCollaterals();
@@ -208,7 +212,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {systemSettings?.platformSubtitle || 'Asset-backed portfolio tracking, real-time collateral coverage, NTSA logbook liens, and complete lending operations.'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => onQuickAction('application')}
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-1.5"
@@ -223,8 +227,69 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <Coins className="w-3.5 h-3.5" />
             <span>Post Repayment</span>
           </button>
+          <button
+            onClick={() => setIsClearModalOpen(true)}
+            className="px-3 py-2 bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/50 text-rose-200 hover:text-white rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+            title="Clear Portfolio / Reset to KSh 0.00"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            <span>Clear Portfolio / Reset</span>
+          </button>
         </div>
       </div>
+
+      {/* Demo / Portfolio Status Banner */}
+      {loans.length > 0 ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-900 dark:text-amber-200 text-xs shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-bold text-slate-900 dark:text-amber-200">
+                Demo Portfolio Active ({loans.length} Facilities • {LoanEngine.formatKES(totalPrincipal)})
+              </p>
+              <p className="text-[11px] text-slate-600 dark:text-amber-300/80">
+                Sample portfolio data is currently visible. You can wipe this to KSh 0.00 to start your company's live lending records.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setIsClearModalOpen(true)}
+              className="w-full sm:w-auto px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear All to KSh 0.00</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-emerald-900 dark:text-emerald-200 text-xs shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-bold text-slate-900 dark:text-emerald-200">
+                Portfolio Balance is Clean: KSh 0.00 (0 Active Facilities)
+              </p>
+              <p className="text-[11px] text-slate-600 dark:text-emerald-300/80">
+                Clean database ready for live business facilities. Click "New Application" to register your first borrower facility.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setIsClearModalOpen(true)}
+              className="w-full sm:w-auto px-3 py-1.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Data Options / Restore Demo</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Primary KPI Grid (Section 32 Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -671,6 +736,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Clear Portfolio & System Reset Modal */}
+      <ClearDataModal
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+      />
     </div>
   );
 };

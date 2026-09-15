@@ -42,6 +42,8 @@ import {
   AssetCategory,
   PropertyListing,
   MaintenanceRequest,
+  ItemLoanAgreement,
+  OnlineApplicationSubmission,
 } from '../types/erp';
 import {
   SEED_BRANCHES,
@@ -60,13 +62,57 @@ import {
   SEED_AUDIT_LOGS,
   SEED_PROPERTIES,
   SEED_MAINTENANCE_REQUESTS,
+  SEED_ITEM_AGREEMENTS,
 } from './seedData';
 import { LoanEngine } from './loanEngine';
 
 const STORAGE_PREFIX = 'davetech_erp_';
 
+function isPortfolioCleared(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_PREFIX + 'portfolio_cleared') === 'true';
+  } catch (e) {
+    return false;
+  }
+}
+
+function isAllDataCleared(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_PREFIX + 'all_data_cleared') === 'true';
+  } catch (e) {
+    return false;
+  }
+}
+
 function getLocal<T>(key: string, fallback: T): T {
   try {
+    const portfolioKeys = [
+      'loans',
+      'collaterals',
+      'valuations',
+      'repayments',
+      'loan_applications',
+      'recovery_cases',
+      'item_agreements',
+      'auctions',
+    ];
+    const allDataKeys = [
+      ...portfolioKeys,
+      'customers',
+      'assets',
+      'properties',
+      'maintenance_requests',
+    ];
+
+    if (isAllDataCleared() && allDataKeys.includes(key)) {
+      const item = localStorage.getItem(STORAGE_PREFIX + key);
+      return item ? JSON.parse(item) : ([] as unknown as T);
+    }
+    if (isPortfolioCleared() && portfolioKeys.includes(key)) {
+      const item = localStorage.getItem(STORAGE_PREFIX + key);
+      return item ? JSON.parse(item) : ([] as unknown as T);
+    }
+
     const item = localStorage.getItem(STORAGE_PREFIX + key);
     return item ? JSON.parse(item) : fallback;
   } catch (e) {
@@ -97,6 +143,7 @@ function setLocal<T>(key: string, data: T): void {
         repayments: 'repayments',
         properties: 'properties',
         maintenance_requests: 'maintenance_requests',
+        item_agreements: 'item_agreements',
         recovery_cases: 'recovery_cases',
         audit_logs: 'audit_logs',
       };
@@ -208,15 +255,18 @@ export class DataService {
     }
 
     // 3. Hydrate core collections from Firestore
-    const collectionsToSync: { key: string; col: string; fallback: any[] }[] = [
+    const collectionsToSync: { key: string; col: string; fallback: any[]; isPortfolio?: boolean }[] = [
       { key: 'customers', col: 'customers', fallback: SEED_CUSTOMERS },
-      { key: 'loans', col: 'loans', fallback: SEED_LOANS },
+      { key: 'loans', col: 'loans', fallback: SEED_LOANS, isPortfolio: true },
       { key: 'properties', col: 'properties', fallback: SEED_PROPERTIES },
-      { key: 'collaterals', col: 'collateral', fallback: SEED_COLLATERALS },
+      { key: 'collaterals', col: 'collateral', fallback: SEED_COLLATERALS, isPortfolio: true },
       { key: 'assets', col: 'assets', fallback: SEED_ASSETS },
     ];
 
-    collectionsToSync.forEach(({ key, col, fallback }) => {
+    collectionsToSync.forEach(({ key, col, fallback, isPortfolio }) => {
+      if (isAllDataCleared()) return;
+      if (isPortfolioCleared() && isPortfolio) return;
+
       getDocs(collection(db, col))
         .then((snap) => {
           if (!snap.empty) {
@@ -237,7 +287,10 @@ export class DataService {
               this.notify();
             }
           } else {
-            // Seed initial records to Firestore
+            // Seed initial records to Firestore only if not cleared by user
+            if (isAllDataCleared()) return;
+            if (isPortfolioCleared() && isPortfolio) return;
+
             const initial = getLocal<any[]>(key, fallback);
             initial.slice(0, 10).forEach((item) => {
               if (item && item.id) {
@@ -253,7 +306,9 @@ export class DataService {
 
     const hasInitialized = localStorage.getItem(STORAGE_PREFIX + 'initialized');
     if (!hasInitialized) {
-      this.resetToSeedData();
+      if (!isPortfolioCleared() && !isAllDataCleared()) {
+        this.resetToSeedData();
+      }
       localStorage.setItem(STORAGE_PREFIX + 'initialized', 'true');
     }
   }
@@ -831,6 +886,253 @@ export class DataService {
     return app;
   }
 
+  static submitOnlineApplication(submission: OnlineApplicationSubmission): {
+    application: LoanApplication;
+    customer: Customer;
+    collateral?: Collateral;
+  } {
+    // 1. Locate or create Customer
+    const customers = this.getCustomers();
+    let customer = customers.find(
+      (c) =>
+        (submission.idNumber && c.idNumber?.trim().toLowerCase() === submission.idNumber.trim().toLowerCase()) ||
+        (submission.phone && c.phone?.trim() === submission.phone.trim())
+    );
+
+    if (!customer) {
+      const nextCustNum = (customers.length + 1).toString().padStart(6, '0');
+      const custId = `CUST-2026-${nextCustNum}`;
+      customer = {
+        id: custId,
+        customerNumber: custId,
+        type: 'individual',
+        fullName: submission.fullName.trim(),
+        idNumber: submission.idNumber.trim(),
+        kraPin: 'A0' + Math.floor(10000000 + Math.random() * 90000000) + 'X',
+        phone: submission.phone.trim(),
+        email: submission.email?.trim() || '',
+        address: submission.physicalAddress.trim(),
+        county: submission.county || 'Nairobi',
+        town: submission.county || 'Nairobi',
+        occupation: submission.employerOrBusiness || submission.employmentType,
+        monthlyIncome: Number(submission.monthlyIncome) || 0,
+        monthlyExpenses: Number(submission.monthlyExpenses) || 0,
+        status: 'active',
+        riskClassification: 'low',
+        branchId: 'BR-001',
+        creditScore: 680,
+        documents: [],
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+      customers.unshift(customer);
+      setLocal('customers', customers);
+    } else {
+      customer.monthlyIncome = Number(submission.monthlyIncome) || customer.monthlyIncome;
+      customer.monthlyExpenses = Number(submission.monthlyExpenses) || customer.monthlyExpenses;
+      customer.address = submission.physicalAddress || customer.address;
+    }
+
+    // 2. Resolve Loan Product & live financial calculation
+    const products = this.getLoanProducts();
+    const product = products.find((p) => p.id === submission.loanProductId) || products[0];
+
+    const calc = LoanEngine.calculateLoan({
+      principal: Number(submission.requestedAmount),
+      interestRatePerMonth: product.interestRatePerMonth,
+      durationMonths: Number(submission.durationMonths),
+      interestMethod: product.interestMethod,
+      repaymentFrequency: submission.repaymentFrequency,
+      processingFeePct: product.processingFeePct || 3,
+      insuranceFeePct: product.insuranceFeePct || 1.5,
+    });
+
+    // 3. Register Pledged Asset & Collateral if provided
+    let newCollateral: Collateral | undefined;
+    if (submission.hasCollateral && submission.collateralTitle) {
+      const assets = this.getAssets();
+      const astNum = (assets.length + 1).toString().padStart(6, '0');
+      const astId = `AST-2026-${astNum}`;
+      const isItemType =
+        (submission.collateralCategory as string) === 'household_goods' ||
+        (submission.collateralCategory as string) === 'furniture' ||
+        (submission.collateralCategory as string) === 'electronics';
+
+      const newAsset: Asset = {
+        id: astId,
+        category: submission.collateralCategory as AssetCategory,
+        customerId: customer.id,
+        ownerName: customer.fullName,
+        titleOrName: submission.collateralTitle,
+        description: submission.collateralDescription || `${submission.collateralBrand || ''} ${submission.collateralModel || ''} (${submission.collateralCondition || 'good'})`,
+        marketValue: Number(submission.collateralEstimatedValue) || Number(submission.requestedAmount) * 1.5,
+        forcedSaleValue: Math.round((Number(submission.collateralEstimatedValue) || Number(submission.requestedAmount) * 1.5) * 0.7),
+        condition: (submission.collateralCondition as any) || 'good',
+        status: 'under_verification',
+        branchId: customer.branchId || 'BR-001',
+        photos: submission.photos || [],
+        itemDetails: isItemType ? {
+          itemType: 'tv',
+          brand: submission.collateralBrand || '',
+          model: submission.collateralModel || '',
+          serialNumber: submission.collateralSerialOrReg || '',
+          condition: (submission.collateralCondition as any) || 'good',
+          custodyType: 'held_by_borrower_chattel',
+        } : undefined,
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+      assets.unshift(newAsset);
+      setLocal('assets', assets);
+
+      const collaterals = this.getCollaterals();
+      const colNum = (collaterals.length + 1).toString().padStart(6, '0');
+      const colId = `COL-2026-${colNum}`;
+      newCollateral = {
+        id: colId,
+        assetId: astId,
+        customerId: customer.id,
+        collateralType: newAsset.category,
+        description: `${submission.collateralTitle} - ${submission.collateralBrand || ''} (Est KES ${Number(submission.collateralEstimatedValue).toLocaleString()})`,
+        marketValue: newAsset.marketValue,
+        forcedSaleValue: newAsset.forcedSaleValue,
+        approvedCollateralValue: Math.round(newAsset.forcedSaleValue * 0.9),
+        loanToValuePct: 70,
+        eligibleCollateralValue: Math.round(newAsset.marketValue * 0.7),
+        status: 'pending_verification',
+        custodian: 'Custody Department',
+        storageLocation: 'Borrower Chattel Custody',
+        verificationStatus: 'pending',
+        branchId: customer.branchId || 'BR-001',
+        pledgeDate: new Date().toISOString().split('T')[0],
+        documents: [],
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+      collaterals.unshift(newCollateral);
+      setLocal('collaterals', collaterals);
+    }
+
+    // 4. Calculate Risk Metrics (DSR & LTV)
+    const dsr = Number(submission.monthlyIncome) > 0
+      ? Math.round((calc.installmentAmount / Number(submission.monthlyIncome)) * 100)
+      : 0;
+
+    const ltv = newCollateral && newCollateral.forcedSaleValue > 0
+      ? Math.round((Number(submission.requestedAmount) / newCollateral.forcedSaleValue) * 100)
+      : 0;
+
+    // 5. Create the LoanApplication record
+    const apps = this.getApplications();
+    const appNum = (apps.length + 1).toString().padStart(6, '0');
+    const appId = `APP-2026-${appNum}`;
+
+    const newApp: LoanApplication = {
+      id: appId,
+      applicationNumber: appId,
+      customerId: customer.id,
+      loanProductId: product.id,
+      productId: product.id,
+      productName: product.name,
+      requestedAmount: Number(submission.requestedAmount),
+      proposedDurationMonths: Number(submission.durationMonths),
+      requestedTenureMonths: Number(submission.durationMonths),
+      interestRatePerMonth: product.interestRatePerMonth,
+      interestMethod: product.interestMethod,
+      repaymentFrequency: submission.repaymentFrequency,
+      purpose: submission.purpose || 'Secured credit facility for household / business needs',
+      collateralId: newCollateral?.id,
+      debtServiceRatio: dsr,
+      loanToValuePct: ltv,
+      calculatedInstallment: calc.installmentAmount,
+      processingFee: calc.processingFee,
+      insuranceFee: calc.insuranceFee,
+      loanOfficerId: 'USR-002',
+      loanOfficerName: 'Credit Origination Desk',
+      branchId: customer.branchId || 'BR-001',
+      status: 'submitted',
+      source: 'online_whatsapp',
+      applicationDate: new Date().toISOString().split('T')[0],
+      monthlyDeclaredIncome: Number(submission.monthlyIncome) || 0,
+      monthlyDeclaredExpenses: Number(submission.monthlyExpenses) || 0,
+      existingLiabilities: 0,
+      documents: (submission.photos || []).map((photoUrl, idx) => ({
+        id: `DOC-${idx + 1}`,
+        name: `Applicant Attachment ${idx + 1}`,
+        type: 'photo',
+        fileUrl: photoUrl,
+        status: 'submitted',
+      })),
+      applicantDetails: {
+        fullName: submission.fullName,
+        idNumber: submission.idNumber,
+        phone: submission.phone,
+        alternatePhone: submission.alternatePhone,
+        email: submission.email,
+        county: submission.county,
+        physicalAddress: submission.physicalAddress,
+        employmentType: submission.employmentType,
+        employerOrBusiness: submission.employerOrBusiness,
+        monthlyIncome: Number(submission.monthlyIncome) || 0,
+        monthlyExpenses: Number(submission.monthlyExpenses) || 0,
+        nextOfKinName: submission.nextOfKinName,
+        nextOfKinPhone: submission.nextOfKinPhone,
+        nextOfKinRelation: submission.nextOfKinRelation,
+      },
+      proposedCollateralDetails: submission.hasCollateral ? {
+        category: submission.collateralCategory,
+        title: submission.collateralTitle,
+        brand: submission.collateralBrand,
+        model: submission.collateralModel,
+        serialOrRegNumber: submission.collateralSerialOrReg,
+        condition: submission.collateralCondition,
+        estimatedValue: Number(submission.collateralEstimatedValue) || 0,
+        description: submission.collateralDescription,
+        photos: submission.photos,
+      } : undefined,
+      clientSignature: submission.signatureText,
+      statusHistory: [
+        {
+          status: 'submitted',
+          changedBy: 'Applicant (Online WhatsApp Portal)',
+          changedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          comment: `Client self-service application received online via WhatsApp link. Requested ${LoanEngine.formatKES(submission.requestedAmount)} over ${submission.durationMonths} months.`,
+        },
+      ],
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+
+    apps.unshift(newApp);
+    setLocal('loan_applications', apps);
+
+    // 6. System Notification
+    const notifs = this.getNotifications();
+    notifs.unshift({
+      id: `NTF-${Date.now()}`,
+      title: '📲 New WhatsApp Loan Application',
+      message: `${submission.fullName} applied online for KES ${Number(submission.requestedAmount).toLocaleString()} (${product.name}). Collateral: ${submission.hasCollateral ? submission.collateralTitle : 'None'}.`,
+      type: 'info',
+      module: 'loans',
+      targetId: appId,
+      branchId: 'BR-001',
+      read: false,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+    });
+    setLocal('notifications', notifs);
+
+    // 7. Audit Log
+    this.logAudit(
+      'ONLINE-PORTAL',
+      submission.fullName,
+      'customer',
+      'SUBMIT_ONLINE_APPLICATION',
+      'loans',
+      appId,
+      'BR-001',
+      `Client submitted online application ${appId} for KES ${Number(submission.requestedAmount).toLocaleString()} via WhatsApp link`
+    );
+
+    this.notify();
+    return { application: newApp, customer, collateral: newCollateral };
+  }
+
   static submitCreditAssessment(
     appIdOrData: any,
     user: UserProfile,
@@ -1256,7 +1558,130 @@ export class DataService {
     this.notify();
   }
 
-  static clearAllRepayments(user: UserProfile): void {
+  static deleteRepayment(receiptNumber: string, user: UserProfile, rollbackBalances: boolean = true): void {
+    const repayments = this.getRepayments();
+    const rIdx = repayments.findIndex((r) => r.receiptNumber === receiptNumber || r.id === receiptNumber);
+    if (rIdx === -1) throw new Error('Repayment record not found');
+
+    const rep = repayments[rIdx];
+
+    if (rollbackBalances && rep.status !== 'reversed') {
+      const loans = this.getLoans();
+      const lIdx = loans.findIndex((l) => l.id === rep.loanId);
+      if (lIdx !== -1) {
+        const loan = loans[lIdx];
+        loan.outstandingPrincipal += rep.principalAllocation;
+        loan.outstandingInterest += rep.interestAllocation;
+        loan.outstandingFees += rep.feesAllocation;
+        loan.outstandingPenalties += rep.penaltyAllocation;
+        loan.totalPaid = Math.max(0, loan.totalPaid - rep.amount);
+        loan.totalOutstanding =
+          loan.outstandingPrincipal +
+          loan.outstandingInterest +
+          loan.outstandingFees +
+          loan.outstandingPenalties;
+        if (loan.status === 'paid_off') {
+          loan.status = 'active';
+          loan.clearedDate = undefined;
+        }
+        loans[lIdx] = loan;
+        setLocal('loans', loans);
+      }
+    }
+
+    repayments.splice(rIdx, 1);
+    setLocal('repayments', repayments);
+
+    this.logAudit(
+      user.id,
+      user.fullName,
+      user.role,
+      'DELETE_REPAYMENT',
+      'repayments',
+      receiptNumber,
+      rep.branchId || 'BR-001',
+      `Deleted payment record ${receiptNumber} (${LoanEngine.formatKES(rep.amount)}) by ${user.fullName}`
+    );
+    this.notify();
+  }
+
+  static deleteSelectedRepayments(receiptNumbers: string[], user: UserProfile, rollbackBalances: boolean = true): void {
+    let repayments = this.getRepayments();
+    const loans = this.getLoans();
+    let loansModified = false;
+
+    for (const receiptNumber of receiptNumbers) {
+      const rep = repayments.find((r) => r.receiptNumber === receiptNumber || r.id === receiptNumber);
+      if (rep && rollbackBalances && rep.status !== 'reversed') {
+        const loan = loans.find((l) => l.id === rep.loanId);
+        if (loan) {
+          loan.outstandingPrincipal += rep.principalAllocation;
+          loan.outstandingInterest += rep.interestAllocation;
+          loan.outstandingFees += rep.feesAllocation;
+          loan.outstandingPenalties += rep.penaltyAllocation;
+          loan.totalPaid = Math.max(0, loan.totalPaid - rep.amount);
+          loan.totalOutstanding =
+            loan.outstandingPrincipal +
+            loan.outstandingInterest +
+            loan.outstandingFees +
+            loan.outstandingPenalties;
+          if (loan.status === 'paid_off') {
+            loan.status = 'active';
+            loan.clearedDate = undefined;
+          }
+          loansModified = true;
+        }
+      }
+    }
+
+    if (loansModified) {
+      setLocal('loans', loans);
+    }
+
+    repayments = repayments.filter((r) => !receiptNumbers.includes(r.receiptNumber) && !receiptNumbers.includes(r.id));
+    setLocal('repayments', repayments);
+
+    this.logAudit(
+      user.id,
+      user.fullName,
+      user.role,
+      'DELETE_SELECTED_REPAYMENTS',
+      'repayments',
+      `${receiptNumbers.length} records`,
+      'BR-001',
+      `Removed ${receiptNumbers.length} payment records by ${user.fullName}`
+    );
+    this.notify();
+  }
+
+  static clearAllRepayments(user: UserProfile, rollbackBalances: boolean = true): void {
+    const repayments = this.getRepayments();
+    if (rollbackBalances && repayments.length > 0) {
+      const loans = this.getLoans();
+      for (const rep of repayments) {
+        if (rep.status !== 'reversed') {
+          const loan = loans.find((l) => l.id === rep.loanId);
+          if (loan) {
+            loan.outstandingPrincipal += rep.principalAllocation;
+            loan.outstandingInterest += rep.interestAllocation;
+            loan.outstandingFees += rep.feesAllocation;
+            loan.outstandingPenalties += rep.penaltyAllocation;
+            loan.totalPaid = Math.max(0, loan.totalPaid - rep.amount);
+            loan.totalOutstanding =
+              loan.outstandingPrincipal +
+              loan.outstandingInterest +
+              loan.outstandingFees +
+              loan.outstandingPenalties;
+            if (loan.status === 'paid_off') {
+              loan.status = 'active';
+              loan.clearedDate = undefined;
+            }
+          }
+        }
+      }
+      setLocal('loans', loans);
+    }
+
     setLocal('repayments', []);
     this.logAudit(
       user.id,
@@ -1266,7 +1691,7 @@ export class DataService {
       'repayments',
       'ALL',
       'BR-001',
-      `Cleared all repayment ledger records by ${user.fullName}`
+      `Cleared all payment records (rollback: ${rollbackBalances}) by ${user.fullName}`
     );
     this.notify();
   }
@@ -1996,6 +2421,475 @@ export class DataService {
       `Saved maintenance request for ${req.propertyTitle}`
     );
     this.notify();
+  }
+
+  // --- Household Items & Chattel Loan Agreements ---
+  static getItemAgreements(): ItemLoanAgreement[] {
+    return getLocal<ItemLoanAgreement[]>('item_agreements', SEED_ITEM_AGREEMENTS);
+  }
+
+  static getItemAgreementById(id: string): ItemLoanAgreement | undefined {
+    return this.getItemAgreements().find((a) => a.id === id || a.onlineShareableToken === id);
+  }
+
+  static saveItemAgreement(data: Partial<ItemLoanAgreement>, user: UserProfile): ItemLoanAgreement {
+    const list = this.getItemAgreements();
+    const existingIndex = data.id ? list.findIndex((a) => a.id === data.id) : -1;
+
+    let agreement: ItemLoanAgreement;
+
+    if (existingIndex !== -1) {
+      agreement = {
+        ...list[existingIndex],
+        ...data,
+      } as ItemLoanAgreement;
+      list[existingIndex] = agreement;
+    } else {
+      const count = list.length + 1;
+      const id = `AGR-ITEM-2026-${String(count).padStart(6, '0')}`;
+      const agreementNumber = `DT/AGR/ITEM/2026/${String(count + 13).padStart(3, '0')}`;
+      const token = `item-agr-token-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+      agreement = {
+        id,
+        agreementNumber,
+        customerId: data.customerId || '',
+        customerName: data.customerName || '',
+        customerPhone: data.customerPhone || '',
+        customerIdNumber: data.customerIdNumber || '',
+        customerEmail: data.customerEmail || '',
+        customerAddress: data.customerAddress || '',
+        itemId: data.itemId,
+        itemType: data.itemType || 'tv',
+        itemTitle: data.itemTitle || 'Household Item',
+        itemBrand: data.itemBrand || '',
+        itemModel: data.itemModel || '',
+        itemSerialNumber: data.itemSerialNumber || '',
+        itemCondition: data.itemCondition || 'Good functional condition',
+        itemMarketValue: Number(data.itemMarketValue) || 10000,
+        itemForcedSaleValue: Number(data.itemForcedSaleValue) || 7000,
+        accessoriesIncluded: data.accessoriesIncluded || [],
+        custodyType: data.custodyType || 'in_branch_vault',
+        custodyLocation: data.custodyLocation || 'Branch Safe Custody',
+        principalAmount: Number(data.principalAmount) || 5000,
+        durationMonths: Number(data.durationMonths) || 1,
+        interestRateMonthly: Number(data.interestRateMonthly) || 4.0,
+        interestMethod: data.interestMethod || 'flat_rate',
+        monthlyInstallment: Number(data.monthlyInstallment) || 5200,
+        totalInterest: Number(data.totalInterest) || 200,
+        totalPayable: Number(data.totalPayable) || 5200,
+        processingFee: Number(data.processingFee) || 250,
+        disbursedAmount: Number(data.disbursedAmount) || 4750,
+        gracePeriodDays: Number(data.gracePeriodDays) || 5,
+        penaltyRateMonthly: Number(data.penaltyRateMonthly) || 5.0,
+        repaymentFrequency: data.repaymentFrequency || 'monthly',
+        status: data.status || 'draft',
+        draftedBy: `${user.fullName} (${user.role.replace('_', ' ')})`,
+        draftedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        notes: data.notes || '',
+        onlineShareableToken: token,
+      };
+      list.unshift(agreement);
+    }
+
+    setLocal('item_agreements', list);
+    this.logAudit(
+      user.id,
+      user.fullName,
+      user.role,
+      existingIndex !== -1 ? 'UPDATE_ITEM_AGREEMENT' : 'DRAFT_ITEM_AGREEMENT',
+      'collateral',
+      agreement.id,
+      'BR-001',
+      `Drafted/Updated Item Loan Agreement ${agreement.agreementNumber} for ${agreement.customerName} (${agreement.itemTitle})`
+    );
+    this.notify();
+    return agreement;
+  }
+
+  static markAgreementSent(
+    id: string,
+    sentVia: 'whatsapp' | 'email' | 'direct_link' | 'printed',
+    user: UserProfile
+  ): ItemLoanAgreement {
+    const list = this.getItemAgreements();
+    const idx = list.findIndex((a) => a.id === id);
+    if (idx === -1) throw new Error(`Item agreement ${id} not found`);
+
+    list[idx] = {
+      ...list[idx],
+      status: list[idx].status === 'draft' ? 'sent_to_client' : list[idx].status,
+      sentAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      sentVia,
+    };
+
+    setLocal('item_agreements', list);
+    this.logAudit(
+      user.id,
+      user.fullName,
+      user.role,
+      'SEND_ITEM_AGREEMENT',
+      'collateral',
+      id,
+      'BR-001',
+      `Sent Item Loan Agreement ${list[idx].agreementNumber} to client via ${sentVia}`
+    );
+    this.notify();
+    return list[idx];
+  }
+
+  static signAgreementOnline(
+    id: string,
+    signatureData: {
+      clientName: string;
+      signature: string;
+      ipOrDevice?: string;
+      notes?: string;
+    }
+  ): ItemLoanAgreement {
+    const list = this.getItemAgreements();
+    const idx = list.findIndex((a) => a.id === id || a.onlineShareableToken === id);
+    if (idx === -1) throw new Error(`Item agreement ${id} not found`);
+
+    list[idx] = {
+      ...list[idx],
+      status: 'signed',
+      signedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      signedByName: signatureData.clientName,
+      clientSignatureData: signatureData.signature,
+      clientIpOrDevice: signatureData.ipOrDevice || 'Web Client / Online Portal',
+      notes: signatureData.notes || list[idx].notes,
+    };
+
+    setLocal('item_agreements', list);
+    this.notify();
+    return list[idx];
+  }
+
+  static convertAgreementToLoan(id: string, user: UserProfile): Loan {
+    const list = this.getItemAgreements();
+    const idx = list.findIndex((a) => a.id === id);
+    if (idx === -1) throw new Error(`Item agreement ${id} not found`);
+
+    const agr = list[idx];
+
+    // Ensure asset exists or create asset
+    let assetId = agr.itemId;
+    if (!assetId) {
+      const assets = this.getAssets();
+      const newAssetId = `AST-2026-${String(assets.length + 1).padStart(6, '0')}`;
+      const newAsset: Asset = {
+        id: newAssetId,
+        category: agr.itemType === 'chair' || agr.itemType === 'furniture' ? 'furniture' : 'household_goods',
+        customerId: agr.customerId,
+        ownerName: agr.customerName,
+        titleOrName: agr.itemTitle,
+        description: `${agr.itemBrand} ${agr.itemModel} - SN: ${agr.itemSerialNumber || 'N/A'}. Condition: ${agr.itemCondition}`,
+        location: agr.custodyLocation || 'Branch Storage',
+        condition: 'good',
+        marketValue: agr.itemMarketValue,
+        forcedSaleValue: agr.itemForcedSaleValue,
+        status: 'active_collateral',
+        branchId: 'BR-001',
+        itemDetails: {
+          itemType: agr.itemType,
+          brand: agr.itemBrand,
+          model: agr.itemModel,
+          serialNumber: agr.itemSerialNumber,
+          condition: 'good',
+          accessoriesIncluded: agr.accessoriesIncluded,
+          custodyType: agr.custodyType,
+          custodyLocation: agr.custodyLocation,
+        },
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+      assets.unshift(newAsset);
+      setLocal('assets', assets);
+      assetId = newAssetId;
+    }
+
+    // Create or find collateral record
+    const collaterals = this.getCollaterals();
+    let colId = `COL-2026-${String(collaterals.length + 1).padStart(6, '0')}`;
+    const newCol: Collateral = {
+      id: colId,
+      customerId: agr.customerId,
+      assetId: assetId,
+      collateralType: agr.itemType === 'chair' || agr.itemType === 'furniture' ? 'furniture' : 'household_goods',
+      description: `Item Loan Security: ${agr.itemTitle} (${agr.itemBrand})`,
+      marketValue: agr.itemMarketValue,
+      forcedSaleValue: agr.itemForcedSaleValue,
+      approvedCollateralValue: agr.itemForcedSaleValue,
+      loanToValuePct: Math.round((agr.principalAmount / agr.itemForcedSaleValue) * 100),
+      eligibleCollateralValue: agr.principalAmount,
+      status: 'active',
+      custodian: user.fullName,
+      storageLocation: agr.custodyLocation || 'Davetech Vault',
+      registrationSecurityRef: agr.agreementNumber,
+      verificationStatus: 'verified',
+      verifiedBy: user.id,
+      verifiedAt: new Date().toISOString().split('T')[0],
+      pledgeDate: new Date().toISOString().split('T')[0],
+      branchId: 'BR-001',
+      documents: [
+        {
+          id: `DOC-${Date.now().toString().slice(-6)}`,
+          name: `Signed Item Loan Agreement (${agr.agreementNumber})`,
+          type: 'security_agreement',
+          status: 'verified',
+          verifiedBy: user.id,
+          verifiedAt: new Date().toISOString().split('T')[0],
+        },
+      ],
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    collaterals.unshift(newCol);
+    setLocal('collateral', collaterals);
+
+    // Create loan
+    const loans = this.getLoans();
+    const loanId = `ITM-2026-${String(loans.length + 1).padStart(6, '0')}`;
+    const loanNumber = `LN-ITM-${Date.now().toString().slice(-6)}`;
+    const calcResult = LoanEngine.calculateLoan({
+      principal: agr.principalAmount,
+      interestRatePerMonth: agr.interestRateMonthly,
+      durationMonths: agr.durationMonths,
+      interestMethod: agr.interestMethod,
+      repaymentFrequency: agr.repaymentFrequency,
+      processingFeePct: agr.principalAmount > 0 ? (agr.processingFee / agr.principalAmount) * 100 : 3,
+      insuranceFeePct: agr.principalAmount > 0 && agr.insuranceFee ? (agr.insuranceFee / agr.principalAmount) * 100 : 1.5,
+      startDate: new Date(),
+    });
+
+    const maturityDate = new Date();
+    maturityDate.setMonth(maturityDate.getMonth() + agr.durationMonths);
+
+    const nextPaymentDate = new Date();
+    if (agr.repaymentFrequency === 'weekly') nextPaymentDate.setDate(nextPaymentDate.getDate() + 7);
+    else if (agr.repaymentFrequency === 'bi_weekly') nextPaymentDate.setDate(nextPaymentDate.getDate() + 14);
+    else nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+
+    const newLoan: Loan = {
+      id: loanId,
+      loanNumber,
+      applicationId: `APP-${agr.agreementNumber.replace(/\//g, '-')}`,
+      customerId: agr.customerId,
+      loanProductId: 'LP-005',
+      collateralId: colId,
+      branchId: 'BR-001',
+      principal: agr.principalAmount,
+      interestRatePerMonth: agr.interestRateMonthly,
+      interestMethod: agr.interestMethod,
+      durationMonths: agr.durationMonths,
+      repaymentFrequency: agr.repaymentFrequency,
+      installmentAmount: agr.monthlyInstallment || calcResult.installmentAmount,
+      totalInterest: agr.totalInterest || calcResult.totalInterest,
+      processingFee: agr.processingFee || calcResult.processingFee,
+      insuranceFee: agr.insuranceFee ?? calcResult.insuranceFee,
+      totalPayable: agr.totalPayable || calcResult.totalPayable,
+      totalPaid: 0,
+      outstandingPrincipal: agr.principalAmount,
+      outstandingInterest: agr.totalInterest || calcResult.totalInterest,
+      outstandingFees: agr.processingFee + (agr.insuranceFee || 0),
+      outstandingPenalties: 0,
+      totalOutstanding: agr.totalPayable,
+      disbursementDate: new Date().toISOString().split('T')[0],
+      disbursementMethod: 'mobile_money',
+      disbursementReference: `MPESA-DISB-${Date.now().toString().slice(-6)}`,
+      maturityDate: maturityDate.toISOString().split('T')[0],
+      nextPaymentDate: nextPaymentDate.toISOString().split('T')[0],
+      status: 'active',
+      daysInArrears: 0,
+      loanOfficerId: user.id,
+      schedule: calcResult.schedule,
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+
+    loans.unshift(newLoan);
+    setLocal('loans', loans);
+
+    // Update agreement status
+    list[idx] = {
+      ...list[idx],
+      status: 'active_loan',
+    };
+    setLocal('item_agreements', list);
+
+    this.logAudit(
+      user.id,
+      user.fullName,
+      user.role,
+      'DISBURSE_ITEM_LOAN',
+      'loans',
+      loanId,
+      'BR-001',
+      `Disbursed Item Loan ${loanNumber} for ${agr.customerName} backed by ${agr.itemTitle}`
+    );
+    this.notify();
+    return newLoan;
+  }
+
+  static deleteItemAgreement(id: string, user: UserProfile): void {
+    const list = this.getItemAgreements();
+    const updated = list.filter((a) => a.id !== id);
+    setLocal('item_agreements', updated);
+    this.logAudit(
+      user.id,
+      user.fullName,
+      user.role,
+      'DELETE_ITEM_AGREEMENT',
+      'collateral',
+      id,
+      'BR-001',
+      `Deleted Item Loan Agreement ${id}`
+    );
+    this.notify();
+  }
+
+  // --- Portfolio & Database Clearing / Reset ---
+
+  /**
+   * Clears all loan portfolio facilities, pledged collateral, valuations, and repayments.
+   * Resets portfolio totals (Total Loan Portfolio, Outstanding Principal, Collateral Value) to KSh 0.00.
+   */
+  static async clearPortfolioData(user?: UserProfile): Promise<void> {
+    const u = user || { id: 'USR-001', fullName: 'Managing Director', role: 'super_admin' as UserRole };
+
+    // Set cleared flag before writing empty arrays
+    try {
+      localStorage.setItem(STORAGE_PREFIX + 'portfolio_cleared', 'true');
+    } catch (e) {}
+
+    setLocal('loans', []);
+    setLocal('collaterals', []);
+    setLocal('valuations', []);
+    setLocal('repayments', []);
+    setLocal('loan_applications', []);
+    setLocal('recovery_cases', []);
+    setLocal('item_agreements', []);
+    setLocal('auctions', []);
+
+    // Clean remote Firestore collections asynchronously
+    try {
+      const collectionsToClear = ['loans', 'collateral', 'repayments', 'item_agreements', 'recovery_cases'];
+      for (const colName of collectionsToClear) {
+        const snap = await getDocs(collection(db, colName));
+        snap.forEach((d) => {
+          deleteDoc(doc(db, colName, d.id)).catch(() => {});
+        });
+      }
+    } catch (err) {
+      console.warn('Firestore portfolio clear notice:', err);
+    }
+
+    await this.logAudit(
+      u.id,
+      u.fullName,
+      u.role,
+      'CLEAR_PORTFOLIO',
+      'loans',
+      'PORTFOLIO_ALL',
+      'BR-001',
+      'Cleared all loan facilities, pledged collaterals, and repayment records. Portfolio balance reset to KSh 0.00'
+    );
+
+    this.notify();
+  }
+
+  /**
+   * Complete Fresh Start: Clears all loans, collaterals, customers, assets, property listings, and item loan agreements.
+   * Keeps company settings, branding, branches, and admin logins.
+   */
+  static async clearAllSystemData(user?: UserProfile): Promise<void> {
+    const u = user || { id: 'USR-001', fullName: 'Managing Director', role: 'super_admin' as UserRole };
+
+    try {
+      localStorage.setItem(STORAGE_PREFIX + 'portfolio_cleared', 'true');
+      localStorage.setItem(STORAGE_PREFIX + 'all_data_cleared', 'true');
+    } catch (e) {}
+
+    setLocal('loans', []);
+    setLocal('collaterals', []);
+    setLocal('valuations', []);
+    setLocal('repayments', []);
+    setLocal('loan_applications', []);
+    setLocal('recovery_cases', []);
+    setLocal('item_agreements', []);
+    setLocal('auctions', []);
+    setLocal('customers', []);
+    setLocal('assets', []);
+    setLocal('properties', []);
+    setLocal('maintenance_requests', []);
+
+    try {
+      const collectionsToClear = [
+        'loans',
+        'collateral',
+        'repayments',
+        'item_agreements',
+        'recovery_cases',
+        'customers',
+        'assets',
+        'properties',
+        'maintenance_requests',
+      ];
+      for (const colName of collectionsToClear) {
+        const snap = await getDocs(collection(db, colName));
+        snap.forEach((d) => {
+          deleteDoc(doc(db, colName, d.id)).catch(() => {});
+        });
+      }
+    } catch (err) {
+      console.warn('Firestore all data clear notice:', err);
+    }
+
+    await this.logAudit(
+      u.id,
+      u.fullName,
+      u.role,
+      'CLEAR_ALL_DATA',
+      'settings',
+      'SYSTEM_RESET',
+      'BR-001',
+      'All system records wiped clean for fresh start. 0 loans, 0 collateral, 0 customers.'
+    );
+
+    this.notify();
+  }
+
+  /**
+   * Restores the default sample seed portfolio (4 facilities, KSh 18.6M) for demonstration/testing.
+   */
+  static restoreSeedData(user?: UserProfile): void {
+    const u = user || { id: 'USR-001', fullName: 'Managing Director', role: 'super_admin' as UserRole };
+
+    try {
+      localStorage.removeItem(STORAGE_PREFIX + 'portfolio_cleared');
+      localStorage.removeItem(STORAGE_PREFIX + 'all_data_cleared');
+    } catch (e) {}
+
+    this.resetToSeedData();
+
+    this.logAudit(
+      u.id,
+      u.fullName,
+      u.role,
+      'RESTORE_DEMO_DATA',
+      'settings',
+      'DEMO_RESTORE',
+      'BR-001',
+      'Restored sample demo portfolio (4 facilities, KSh 18.6M) and collateral records.'
+    );
+
+    this.notify();
+  }
+
+  static isPortfolioCleared(): boolean {
+    return isPortfolioCleared();
+  }
+
+  static isAllDataCleared(): boolean {
+    return isAllDataCleared();
   }
 }
 

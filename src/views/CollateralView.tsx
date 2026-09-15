@@ -4,7 +4,7 @@
  * Vault storage tracking, and Controlled Collateral Release process.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   Plus,
@@ -21,6 +21,7 @@ import {
   Printer,
   X,
   ExternalLink,
+  Tv,
 } from 'lucide-react';
 import { DataService } from '../services/dataService';
 import { Collateral, CollateralStatus, Asset, Customer } from '../types/erp';
@@ -76,6 +77,13 @@ export const CollateralView: React.FC = () => {
   const refreshData = () => {
     setCollaterals(DataService.getCollaterals());
   };
+
+  useEffect(() => {
+    const unsub = DataService.subscribe(() => {
+      setCollaterals(DataService.getCollaterals());
+    });
+    return unsub;
+  }, []);
 
   // Filter available assets for selected customer
   const customerAssets = assets.filter((a) => a.customerId === newColCustomerId);
@@ -216,7 +224,15 @@ export const CollateralView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <a
+            href="#item_loans"
+            className="px-3.5 py-2 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-semibold shadow-xs transition flex items-center gap-1.5"
+          >
+            <Tv className="w-3.5 h-3.5" />
+            <span>Loans on Household Items (TVs, Woofers, Chairs)</span>
+          </a>
+
           {hasPermission('collateral.create') && (
             <button
               id="pledge-collateral-btn"

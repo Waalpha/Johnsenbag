@@ -33,6 +33,9 @@ import {
   MapPin,
   Home,
   Wrench,
+  Tv,
+  MessageCircle,
+  FileCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -49,6 +52,7 @@ export type ActiveView =
   | 'property_maintenance'
   | 'real_estate'
   | 'loan_products'
+  | 'item_loans'
   | 'applications'
   | 'credit_assessment'
   | 'approvals'
@@ -64,7 +68,9 @@ export type ActiveView =
   | 'users'
   | 'branches'
   | 'settings'
-  | 'customer_portal';
+  | 'customer_portal'
+  | 'public_loan_form'
+  | 'public_agreement';
 
 interface SidebarProps {
   activeView: ActiveView;
@@ -126,6 +132,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       label: 'Secured Lending Operations',
       items: [
+        { id: 'item_loans', label: 'Item Loans (TV, Audio, Sofas)', icon: Tv, badge: 'New', badgeColor: 'bg-indigo-600 text-white' },
         { id: 'loan_products', label: 'Loan Products', icon: Briefcase },
         { id: 'applications', label: 'Loan Applications', icon: FileSpreadsheet },
         { id: 'credit_assessment', label: 'Credit Assessment', icon: UserCheck },
@@ -159,8 +166,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
-      label: 'Self-Service Portal',
+      label: 'Self-Service & Online Form',
       items: [
+        { id: 'public_loan_form', label: 'WhatsApp Online Form', icon: MessageCircle, badge: 'WhatsApp', badgeColor: 'bg-emerald-600 text-white' },
+        { id: 'public_agreement', label: 'Item Agreement e-Sign', icon: FileCheck, badge: 'WhatsApp', badgeColor: 'bg-indigo-600 text-white' },
         { id: 'customer_portal', label: 'Customer Portal View', icon: ExternalLink, badge: 'Client', badgeColor: 'bg-teal-600 text-white' },
       ],
     },

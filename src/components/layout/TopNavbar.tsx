@@ -23,6 +23,7 @@ import {
   Pencil,
   Sparkles,
   Building2,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types/erp';
@@ -224,6 +225,17 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
               >
                 <Pencil className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Edit Platform Name & Title</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsQuickActionOpen(false);
+                  if (setActiveView) setActiveView('settings');
+                }}
+                className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-slate-700 text-rose-700 dark:text-rose-300 border-t border-slate-100 dark:border-slate-700 font-semibold"
+              >
+                <Trash2 className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                <span>Clear / Reset Portfolio Data</span>
               </button>
             </div>
           )}

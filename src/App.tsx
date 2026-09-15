@@ -28,12 +28,69 @@ import { ReportsView } from './views/ReportsView';
 import { SettingsView } from './views/SettingsView';
 import { CustomerPortalView } from './views/CustomerPortalView';
 import { RealEstateView } from './views/RealEstateView';
+import { ItemLoansView } from './views/ItemLoansView';
+import { PublicLoanApplicationView } from './views/PublicLoanApplicationView';
+import { PublicAgreementView } from './views/PublicAgreementView';
 
 const MainLayout: React.FC = () => {
   const { currentUser, isDarkMode, isEditPlatformModalOpen, setIsEditPlatformModalOpen, isLoggedIn } = useAuth();
   const [activeView, setActiveView] = useState<ActiveView>('dashboard');
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Check if unauthenticated user or direct WhatsApp URL is accessing public loan application form
+  const [isApplyingOnline, setIsApplyingOnline] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      const search = window.location.search;
+      return hash.startsWith('#apply') || search.includes('apply=true');
+    }
+    return false;
+  });
+
+  // Check if unauthenticated user or direct WhatsApp link is accessing public agreement letter
+  const [isViewingAgreementOnline, setIsViewingAgreementOnline] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      const search = window.location.search;
+      return (
+        hash.startsWith('#item-agreement-') ||
+        hash.startsWith('#agreement') ||
+        search.includes('agreement=')
+      );
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleHashAndUrl = () => {
+      const hash = window.location.hash;
+      const search = window.location.search;
+
+      if (hash.startsWith('#apply') || search.includes('apply=true')) {
+        setIsApplyingOnline(true);
+      } else {
+        setIsApplyingOnline(false);
+      }
+
+      if (
+        hash.startsWith('#item-agreement-') ||
+        hash.startsWith('#agreement') ||
+        search.includes('agreement=')
+      ) {
+        setIsViewingAgreementOnline(true);
+      } else {
+        setIsViewingAgreementOnline(false);
+      }
+    };
+    handleHashAndUrl();
+    window.addEventListener('hashchange', handleHashAndUrl);
+    window.addEventListener('popstate', handleHashAndUrl);
+    return () => {
+      window.removeEventListener('hashchange', handleHashAndUrl);
+      window.removeEventListener('popstate', handleHashAndUrl);
+    };
+  }, []);
 
   // Global Keyboard Shortcut: Ctrl+K / Cmd+K for Global Search
   useEffect(() => {
@@ -46,6 +103,43 @@ const MainLayout: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // Detect URL hash navigation (e.g. #item_loans)
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      if (hash === '#item_loans') {
+        setActiveView('item_loans');
+      }
+    };
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
+  // If accessing online agreement letter link via WhatsApp (#item-agreement-... or #agreement), render directly
+  if (isViewingAgreementOnline) {
+    return (
+      <PublicAgreementView
+        onBackToPortal={() => {
+          window.location.hash = '';
+          setIsViewingAgreementOnline(false);
+        }}
+      />
+    );
+  }
+
+  // If accessing online application link via WhatsApp (#apply), render directly without requiring staff login
+  if (isApplyingOnline) {
+    return (
+      <PublicLoanApplicationView
+        onBackToPortal={() => {
+          window.location.hash = '';
+          setIsApplyingOnline(false);
+        }}
+      />
+    );
+  }
 
   if (!isLoggedIn) {
     return <LoginScreen />;
@@ -152,6 +246,8 @@ const MainLayout: React.FC = () => {
 
             {activeView === 'real_estate' && <RealEstateView initialTab="all" />}
 
+            {activeView === 'item_loans' && <ItemLoansView />}
+
             {activeView === 'loan_products' && <LoanProductsView />}
 
             {activeView === 'applications' && <ApplicationsView />}
@@ -183,6 +279,18 @@ const MainLayout: React.FC = () => {
             {activeView === 'settings' && <SettingsView />}
 
             {activeView === 'customer_portal' && <CustomerPortalView />}
+
+            {activeView === 'public_loan_form' && (
+              <PublicLoanApplicationView
+                onBackToPortal={() => setActiveView('applications')}
+              />
+            )}
+
+            {activeView === 'public_agreement' && (
+              <PublicAgreementView
+                onBackToPortal={() => setActiveView('item_loans')}
+              />
+            )}
           </div>
         </main>
       </div>

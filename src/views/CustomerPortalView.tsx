@@ -16,9 +16,14 @@ import {
   ArrowUpRight,
   FileSpreadsheet,
   AlertTriangle,
+  Tv,
+  FileText,
+  UserCheck,
+  Shield,
+  Send,
 } from 'lucide-react';
 import { DataService } from '../services/dataService';
-import { Customer, Loan, Repayment } from '../types/erp';
+import { Customer, Loan, Repayment, ItemLoanAgreement } from '../types/erp';
 import { LoanEngine } from '../services/loanEngine';
 import { useAuth } from '../context/AuthContext';
 import { Modal } from '../components/common/Modal';
@@ -34,6 +39,9 @@ export const CustomerPortalView: React.FC = () => {
   const customerLoans = DataService.getLoans().filter((l) => l.customerId === customer?.id);
   const customerRepayments = DataService.getRepayments().filter((r) => r.customerId === customer?.id);
   const customerCollaterals = DataService.getCollaterals().filter((c) => c.customerId === customer?.id);
+  const customerItemAgreements = DataService.getItemAgreements().filter(
+    (a) => a.customerId === customer?.id || a.customerIdNumber === customer?.idNumber
+  );
 
   // M-Pesa Repay Modal
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
@@ -42,12 +50,19 @@ export const CustomerPortalView: React.FC = () => {
   const [isProcessingStk, setIsProcessingStk] = useState(false);
   const [stkSuccess, setStkSuccess] = useState(false);
 
+  // Signing agreement state in portal
+  const [signingAgreement, setSigningAgreement] = useState<ItemLoanAgreement | null>(null);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [signingName, setSigningName] = useState('');
+  const [signatureText, setSignatureText] = useState('');
+
   // Print engine
   const [printDoc, setPrintDoc] = useState<{
     open: boolean;
     type: PrintableDocType;
     loan?: Loan;
     customer?: Customer;
+    itemAgreement?: ItemLoanAgreement;
   }>({ open: false, type: 'repayment_schedule' });
 
   const totalDebt = customerLoans.reduce((sum, l) => sum + l.totalOutstanding, 0);
@@ -216,6 +231,129 @@ export const CustomerPortalView: React.FC = () => {
         ))}
       </div>
 
+      {/* Household Item Collateral Agreements (TV, Woofer, Sofa, Appliances) */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Tv className="w-4 h-4 text-indigo-600" />
+            <span>My Pledged Household Items & Loan Agreements</span>
+          </h2>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
+            {customerItemAgreements.length} Agreement(s)
+          </span>
+        </div>
+
+        {customerItemAgreements.length === 0 ? (
+          <div className="p-6 text-center text-slate-400 font-sans border border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
+            <Tv className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+            <p className="text-xs font-medium">No household item loans or pledged agreements on file for this account.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {customerItemAgreements.map((agreement) => (
+              <div
+                key={agreement.id}
+                className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-mono text-slate-400 font-semibold">{agreement.agreementNumber}</span>
+                    <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">{agreement.itemTitle}</h3>
+                    <p className="text-[11px] text-slate-500">
+                      {agreement.itemBrand} {agreement.itemModel} • Serial: {agreement.itemSerialNumber || 'Tagged'}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                      agreement.status === 'signed' || agreement.status === 'active_loan'
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                    }`}
+                  >
+                    {agreement.status.replace(/_/g, ' ')}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-white dark:bg-slate-800 p-2.5 rounded-lg border border-slate-100 dark:border-slate-700">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">Sanctioned Principal</span>
+                    <strong className="text-slate-900 dark:text-slate-100 font-mono">
+                      {LoanEngine.formatKES(agreement.principalAmount)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">Monthly Repayment</span>
+                    <strong className="text-emerald-600 dark:text-emerald-400 font-mono">
+                      {LoanEngine.formatKES(agreement.monthlyInstallment)}/mo
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">Tenure</span>
+                    <span className="text-slate-700 dark:text-slate-300 font-medium">
+                      {agreement.durationMonths} Month(s)
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 block">Custody Mode</span>
+                    <span className="text-slate-700 dark:text-slate-300 font-medium">
+                      {agreement.custodyType === 'in_branch_vault' ? '🏛️ Vault Storage' : '🏠 Held at Residence'}
+                    </span>
+                  </div>
+                </div>
+
+                {agreement.signedAt ? (
+                  <div className="flex items-center justify-between text-[11px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                    <span className="flex items-center gap-1 font-semibold">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Signed Digitally on {agreement.signedAt.split(' ')[0]}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setPrintDoc({
+                          open: true,
+                          type: 'item_loan_agreement',
+                          itemAgreement: agreement,
+                          customer,
+                        });
+                      }}
+                      className="text-xs underline font-bold cursor-pointer"
+                    >
+                      Print Agreement
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        setSigningAgreement(agreement);
+                        setSigningName(customer?.fullName || agreement.customerName);
+                        setSignatureText(`/s/ ${(customer?.fullName || agreement.customerName).toUpperCase()}`);
+                      }}
+                      className="flex-1 py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <UserCheck className="w-3.5 h-3.5" /> Review & Sign Online
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPrintDoc({
+                          open: true,
+                          type: 'item_loan_agreement',
+                          itemAgreement: agreement,
+                          customer,
+                        });
+                      }}
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 cursor-pointer"
+                      title="Preview / Print Agreement"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Repayments History */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs p-5 space-y-4">
         <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -330,12 +468,102 @@ export const CustomerPortalView: React.FC = () => {
         </form>
       </Modal>
 
+      {/* BORROWER ONLINE SIGN MODAL */}
+      {signingAgreement && (
+        <Modal
+          isOpen={!!signingAgreement}
+          onClose={() => setSigningAgreement(null)}
+          title={`Sign Item Loan Agreement • ${signingAgreement.agreementNumber}`}
+          maxWidth="max-w-md"
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              DataService.signAgreementOnline(signingAgreement.id, {
+                clientName: signingName || customer.fullName,
+                signature: signatureText,
+                ipOrDevice: `Borrower Portal (${navigator.userAgent.substring(0, 30)}...)`,
+                notes: 'Accepted directly by client in self-service borrower portal.',
+              });
+              setSigningAgreement(null);
+            }}
+            className="space-y-4 text-xs"
+          >
+            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl text-indigo-900 dark:text-indigo-200">
+              <p className="font-bold">Item Chattel Mortgage & Pledge</p>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                Item: <strong>{signingAgreement.itemTitle}</strong> • Principal: <strong>{LoanEngine.formatKES(signingAgreement.principalAmount)}</strong> • Installment: <strong>{LoanEngine.formatKES(signingAgreement.monthlyInstallment)}/mo</strong>
+              </p>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Full Legal Name
+              </label>
+              <input
+                type="text"
+                required
+                value={signingName}
+                onChange={(e) => setSigningName(e.target.value)}
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Type Electronic Signature
+              </label>
+              <input
+                type="text"
+                required
+                value={signatureText}
+                onChange={(e) => setSignatureText(e.target.value)}
+                placeholder="/s/ FULL NAME"
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono"
+              />
+            </div>
+
+            <div className="flex items-start gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="portal-agree"
+                checked={agreeTerms}
+                onChange={(e) => setAgreeTerms(e.target.checked)}
+                required
+                className="mt-0.5"
+              />
+              <label htmlFor="portal-agree" className="text-[11px] text-slate-600 dark:text-slate-400 leading-tight">
+                I agree to the Chattels Transfer Act Cap 28 terms, scheduled monthly payments, and grant lender repossession rights in case of default.
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setSigningAgreement(null)}
+                className="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!agreeTerms}
+                className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold"
+              >
+                Confirm & Sign Agreement
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
       {/* PRINT ENGINE */}
       {printDoc.open && (
         <PrintTemplate
           docType={printDoc.type}
           loan={printDoc.loan}
           customer={printDoc.customer}
+          itemAgreement={printDoc.itemAgreement}
           onClose={() => setPrintDoc({ open: false, type: 'repayment_schedule' })}
         />
       )}

@@ -7,11 +7,12 @@ import React from 'react';
 import { Printer, Download, X } from 'lucide-react';
 import { DataService } from '../../services/dataService';
 import { LoanEngine } from '../../services/loanEngine';
-import { Customer, Loan, Repayment, Collateral, Asset } from '../../types/erp';
+import { Customer, Loan, Repayment, Collateral, Asset, ItemLoanAgreement } from '../../types/erp';
 
 export type PrintableDocType =
   | 'payment_receipt'
   | 'loan_agreement'
+  | 'item_loan_agreement'
   | 'repayment_schedule'
   | 'customer_statement'
   | 'collateral_release'
@@ -24,6 +25,7 @@ interface PrintTemplateProps {
   repayment?: Repayment;
   collateral?: Collateral;
   asset?: Asset;
+  itemAgreement?: ItemLoanAgreement;
   onClose: () => void;
 }
 
@@ -34,6 +36,7 @@ export const PrintTemplate: React.FC<PrintTemplateProps> = ({
   repayment,
   collateral,
   asset,
+  itemAgreement,
   onClose,
 }) => {
   const settings = DataService.getSettings();
@@ -285,6 +288,183 @@ export const PrintTemplate: React.FC<PrintTemplateProps> = ({
                   <p className="font-semibold">Kevin Kiprop (Branch Manager)</p>
                   <p className="text-slate-500">For {settings?.companyName || `${settings?.platformName || 'Davetech'} Solutions`}</p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* TEMPLATE 2B: ITEM LOAN AGREEMENT & CHATTEL MORTGAGE */}
+          {docType === 'item_loan_agreement' && itemAgreement && (
+            <div className="space-y-5">
+              <div className="text-center border-b border-slate-200 pb-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                  Chattels Transfer Act (Cap 28 Laws of Kenya)
+                </span>
+                <h2 className="text-lg font-bold text-slate-900 tracking-wide uppercase mt-1">
+                  Item Collateral Loan Agreement & Chattel Pledge
+                </h2>
+                <div className="flex items-center justify-center gap-4 text-xs text-slate-500 font-mono mt-1">
+                  <span>AGREEMENT REF: <strong>{itemAgreement.agreementNumber}</strong></span>
+                  <span>•</span>
+                  <span>DATE: <strong>{itemAgreement.draftedAt.split(' ')[0]}</strong></span>
+                  <span>•</span>
+                  <span>STATUS: <strong className="uppercase">{itemAgreement.status.replace(/_/g, ' ')}</strong></span>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-700 leading-relaxed">
+                This Item Chattel Loan Agreement is made between <strong>{settings?.companyName || `${settings?.platformName || 'Davetech'} Solutions`}</strong> (hereinafter called the "<strong>Lender</strong>") of {settings?.companyAddress || 'Davetech Towers, Kimathi Street, Nairobi'}, and:
+                <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-200 font-mono text-[11px]">
+                  <div><strong>Borrower:</strong> {itemAgreement.customerName}</div>
+                  <div><strong>National ID:</strong> {itemAgreement.customerIdNumber}</div>
+                  <div><strong>Phone:</strong> {itemAgreement.customerPhone}</div>
+                  <div><strong>Email:</strong> {itemAgreement.customerEmail || 'N/A'}</div>
+                  <div className="col-span-2"><strong>Residence / Address:</strong> {itemAgreement.customerAddress || 'N/A'}</div>
+                </div>
+              </div>
+
+              {/* Pledged Household Item Specifications */}
+              <div className="border-2 border-indigo-100 rounded-xl p-4 bg-indigo-50/40">
+                <div className="flex items-center justify-between border-b border-indigo-200/60 pb-2 mb-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                    Schedule 1: Pledged Collateral Item & Condition Assessment
+                  </h3>
+                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-indigo-200/60 text-indigo-900">
+                    Category: {itemAgreement.itemType.toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <p className="text-slate-500 text-[10px]">ITEM DESCRIPTION</p>
+                    <p className="font-bold text-slate-900">{itemAgreement.itemTitle}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-[10px]">BRAND & MODEL</p>
+                    <p className="font-semibold text-slate-800">{itemAgreement.itemBrand} {itemAgreement.itemModel}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-[10px]">SERIAL NO. / TAG</p>
+                    <p className="font-mono font-bold text-slate-900">{itemAgreement.itemSerialNumber || 'CHATTEL-TAGGED'}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-[10px]">PHYSICAL CONDITION</p>
+                    <p className="font-medium text-slate-800">{itemAgreement.itemCondition}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-[10px]">MARKET VALUE</p>
+                    <p className="font-bold text-slate-900">{LoanEngine.formatKES(itemAgreement.itemMarketValue)}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-[10px]">FORCED SALE VALUE (FSV)</p>
+                    <p className="font-bold text-slate-900">{LoanEngine.formatKES(itemAgreement.itemForcedSaleValue)}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-slate-500 text-[10px]">ACCESSORIES INCLUDED IN PLEDGE</p>
+                    <p className="text-slate-800 text-[11px]">
+                      {itemAgreement.accessoriesIncluded && itemAgreement.accessoriesIncluded.length > 0
+                        ? itemAgreement.accessoriesIncluded.join(', ')
+                        : 'Standard accessories as presented upon inspection'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-[10px]">CUSTODY ARRANGEMENT</p>
+                    <p className="font-semibold text-slate-800 text-[11px]">
+                      {itemAgreement.custodyType === 'in_branch_vault'
+                        ? '🏛️ Branch Vault Storage'
+                        : '🏠 Held by Borrower (Chattel Tagged)'}
+                    </p>
+                    <p className="text-[10px] text-slate-500">{itemAgreement.custodyLocation}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Financial Terms */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs border border-slate-200 rounded-xl p-4 bg-slate-50 font-mono">
+                <div>
+                  <p className="text-slate-500 text-[10px]">PRINCIPAL SANCTIONED</p>
+                  <p className="font-bold text-sm text-slate-900">{LoanEngine.formatKES(itemAgreement.principalAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-[10px]">MONTHLY INTEREST</p>
+                  <p className="font-bold text-sm text-slate-900">{itemAgreement.interestRateMonthly}% / month</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-[10px]">MONTHLY INSTALLMENT</p>
+                  <p className="font-bold text-sm text-emerald-700">{LoanEngine.formatKES(itemAgreement.monthlyInstallment)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-[10px]">TOTAL PAYABLE</p>
+                  <p className="font-bold text-sm text-slate-900">{LoanEngine.formatKES(itemAgreement.totalPayable)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-[10px]">DURATION / TENURE</p>
+                  <p className="font-semibold text-slate-800">{itemAgreement.durationMonths} Month(s)</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-[10px]">PROCESSING FEE</p>
+                  <p className="font-semibold text-slate-800">{LoanEngine.formatKES(itemAgreement.processingFee)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-[10px]">NET DISBURSED TO MPESA</p>
+                  <p className="font-bold text-slate-900">{LoanEngine.formatKES(itemAgreement.disbursedAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-[10px]">GRACE PERIOD & PENALTY</p>
+                  <p className="font-semibold text-slate-800">{itemAgreement.gracePeriodDays} Days ({itemAgreement.penaltyRateMonthly}% / mo)</p>
+                </div>
+              </div>
+
+              {/* Legal Covenants */}
+              <div className="space-y-1.5 text-[10px] text-slate-600 border-t border-slate-200 pt-3">
+                <h4 className="font-bold text-slate-800 uppercase text-[11px]">Binding Terms & Chattel Covenants:</h4>
+                <p>
+                  <strong>1. Ownership Warranty:</strong> The Borrower warrants that they are the sole lawful owner of the item scheduled above, unencumbered by any prior liens, hire-purchase claims, or third-party rights.
+                </p>
+                <p>
+                  <strong>2. Pledge of Chattel:</strong> Pursuant to the Chattels Transfer Act (Cap 28), the Borrower hereby pledges and creates a fixed security interest over the item in favor of {settings?.companyName || 'Davetech Solutions'}.
+                </p>
+                <p>
+                  <strong>3. Custody & Preservation:</strong> Where the item is stored in the Lender's vault, the Lender shall exercise reasonable bailee care. Where retained by the Borrower, the Borrower covenants not to sell, remove from stated premises, or damage the item without prior written lender consent.
+                </p>
+                <p>
+                  <strong>4. Default & Statutory Sale:</strong> If any scheduled installment remains unpaid 7 days beyond due date, the entire balance accelerates. The Lender shall have immediate statutory right to enter premises, take possession, and sell the item to recover all outstanding debt, interest, and recovery costs.
+                </p>
+                <p>
+                  <strong>5. Full Settlement Discharge:</strong> Upon prompt and complete payment of all sums due, the Lender shall formally discharge the chattel security and return the item (if stored in vault) in equal working condition.
+                </p>
+              </div>
+
+              {/* Signatures & Online Acceptance */}
+              <div className="pt-4 border-t border-slate-200">
+                {itemAgreement.signedAt ? (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <div>
+                      <span className="font-bold text-emerald-800 uppercase text-[10px] tracking-wider">
+                        ✓ Digital Online Signature Verified
+                      </span>
+                      <p className="font-bold text-slate-900 mt-0.5">Accepted by: {itemAgreement.signedByName || itemAgreement.customerName}</p>
+                      <p className="text-[10px] text-slate-600 font-mono">
+                        Date & Time: {itemAgreement.signedAt} • Device/IP: {itemAgreement.clientIpOrDevice || 'Web Client'}
+                      </p>
+                    </div>
+                    <div className="text-right text-[10px] text-slate-500 font-mono">
+                      <span>Ref: {itemAgreement.clientSignatureData || 'VERIFIED-ONLINE'}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pt-4 flex justify-between text-center text-[10px]">
+                    <div>
+                      <div className="h-10 border-b border-slate-400 w-48 mx-auto mb-1"></div>
+                      <p className="font-semibold text-slate-900">{itemAgreement.customerName}</p>
+                      <p className="text-slate-500">Borrower Signature / Acceptance</p>
+                    </div>
+                    <div>
+                      <div className="h-10 border-b border-slate-400 w-48 mx-auto mb-1"></div>
+                      <p className="font-semibold text-slate-900">{itemAgreement.draftedBy}</p>
+                      <p className="text-slate-500">For {settings?.companyName || `${settings?.platformName || 'Davetech'} Solutions`}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
