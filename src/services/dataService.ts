@@ -1256,6 +1256,21 @@ export class DataService {
     this.notify();
   }
 
+  static clearAllRepayments(user: UserProfile): void {
+    setLocal('repayments', []);
+    this.logAudit(
+      user.id,
+      user.fullName,
+      user.role,
+      'CLEAR_ALL_REPAYMENTS',
+      'repayments',
+      'ALL',
+      'BR-001',
+      `Cleared all repayment ledger records by ${user.fullName}`
+    );
+    this.notify();
+  }
+
   // --- Restructuring ---
   static restructureLoan(
     loanId: string,

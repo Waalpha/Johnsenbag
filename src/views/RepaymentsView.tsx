@@ -17,6 +17,7 @@ import {
   Coins,
   ArrowDownLeft,
   X,
+  Trash2,
 } from 'lucide-react';
 import { DataService } from '../services/dataService';
 import { Repayment, Loan, Customer, PaymentMethod } from '../types/erp';
@@ -146,6 +147,17 @@ export const RepaymentsView: React.FC = () => {
     }
   };
 
+  const handleClearAllPayments = () => {
+    if (window.confirm('Are you sure you want to clear all payment records? This action cannot be undone.')) {
+      try {
+        DataService.clearAllRepayments(currentUser);
+        refreshData();
+      } catch (err: any) {
+        alert(err.message || 'Failed to clear payments');
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner */}
@@ -164,19 +176,31 @@ export const RepaymentsView: React.FC = () => {
           </p>
         </div>
 
-        {hasPermission('repayments.post') && (
-          <button
-            id="post-repayment-btn"
-            onClick={() => {
-              setPayError('');
-              setIsPostModalOpen(true);
-            }}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Post Repayment / Collection</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {hasPermission('repayments.post') && repayments.length > 0 && (
+            <button
+              onClick={handleClearAllPayments}
+              className="px-3 py-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold border border-rose-200 dark:border-rose-900 transition flex items-center gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear All Payments</span>
+            </button>
+          )}
+
+          {hasPermission('repayments.post') && (
+            <button
+              id="post-repayment-btn"
+              onClick={() => {
+                setPayError('');
+                setIsPostModalOpen(true);
+              }}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Post Repayment / Collection</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filter Toolbar */}
