@@ -694,11 +694,11 @@ export const AssetsView: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Registry Search Report Certified (Ref: {selectedAsset.verificationChecklist.registrySearchReference || 'NTSA/OK'})</span>
+                  <span>Registry Search Report Certified (Ref: {selectedAsset.verificationChecklist?.registrySearchReference || 'NTSA/OK'})</span>
                 </div>
                 <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Physical Inspection Stamped by {selectedAsset.verificationChecklist.inspectorName || 'Officer'}</span>
+                  <span>Physical Inspection Stamped by {selectedAsset.verificationChecklist?.inspectorName || 'Officer'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
                   <CheckCircle2 className="w-4 h-4" />
