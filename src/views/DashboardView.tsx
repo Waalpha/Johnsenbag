@@ -25,6 +25,7 @@ import {
   Wrench,
   Trash2,
   RotateCcw,
+  Tv,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -48,7 +49,7 @@ import { ClearDataModal } from '../components/common/ClearDataModal';
 
 interface DashboardViewProps {
   onNavigate: (view: ActiveView) => void;
-  onQuickAction: (action: 'customer' | 'asset' | 'collateral' | 'application' | 'repayment' | 'property') => void;
+  onQuickAction: (action: 'customer' | 'asset' | 'collateral' | 'application' | 'repayment' | 'property' | 'item_loan') => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -213,6 +214,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => onQuickAction('item_loan')}
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Tv className="w-3.5 h-3.5" />
+            <span>Put Household Item</span>
+          </button>
           <button
             onClick={() => onQuickAction('application')}
             className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-1.5"

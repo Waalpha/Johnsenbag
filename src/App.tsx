@@ -146,7 +146,7 @@ const MainLayout: React.FC = () => {
   }
 
   const handleQuickAction = (
-    action: 'customer' | 'asset' | 'collateral' | 'application' | 'repayment' | 'property'
+    action: 'customer' | 'asset' | 'collateral' | 'application' | 'repayment' | 'property' | 'item_loan'
   ) => {
     switch (action) {
       case 'customer':
@@ -166,6 +166,9 @@ const MainLayout: React.FC = () => {
         break;
       case 'property':
         setActiveView('property_management');
+        break;
+      case 'item_loan':
+        setActiveView('item_loans');
         break;
       default:
         break;

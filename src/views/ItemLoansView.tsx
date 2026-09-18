@@ -727,41 +727,6 @@ export const ItemLoansView: React.FC = () => {
               </p>
             </div>
 
-            {/* Quick Category Selector */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
-                Step 1: Choose Household Item Category Preset
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                {ITEM_CATEGORIES.map((cat) => {
-                  const Icon = cat.icon;
-                  const isSelected = draftItemType === cat.type;
-                  return (
-                    <button
-                      key={cat.type}
-                      type="button"
-                      onClick={() => handleApplyCategoryPreset(cat)}
-                      className={`p-3 rounded-xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-200 ring-1 ring-indigo-500'
-                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className={`p-2 rounded-lg ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
-                        <Icon className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold leading-tight">{cat.label}</p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                          ~{LoanEngine.formatKES(cat.benchmarkValue)}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             <form onSubmit={handleSaveDraftAgreement} className="space-y-5">
               {/* Step 2: Client Details */}
               <div className="border-t border-slate-200 dark:border-slate-700 pt-4 space-y-3">

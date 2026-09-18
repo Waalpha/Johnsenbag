@@ -24,6 +24,7 @@ import {
   Sparkles,
   Building2,
   Trash2,
+  Tv,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserRole } from '../../types/erp';
@@ -214,6 +215,16 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
               >
                 <Building2 className="w-4 h-4 text-emerald-500" />
                 <span>Property / Land / House Listing</span>
+              </button>
+              <button
+                onClick={() => {
+                  setIsQuickActionOpen(false);
+                  onQuickAction?.('item_loan');
+                }}
+                className="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-indigo-50 dark:hover:bg-slate-700 text-indigo-700 dark:text-indigo-300 font-semibold"
+              >
+                <Tv className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>Put Household Item (TV, Sofa, Audio)</span>
               </button>
 
               <button
